@@ -1,0 +1,29 @@
+{
+  "name": "course-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local multi-school Canvas dashboard: deadlines, weekly AI study guides, daily/weekly reports.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/main.ts",
+    "test": "TZ=America/Los_Angeles COURSEHUB_QUIET=1 node --disable-warning=ExperimentalWarning --test --test-concurrency=2 \"test/*.test.ts\"",
+    "test:chrome": "TZ=America/Los_Angeles COURSEHUB_QUIET=1 node --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/chrome/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "dev:mock": "node --disable-warning=ExperimentalWarning mock/dev.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.4",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.13",
+    "ical.js": "^2.2.1",
+    "playwright-core": "^1.64.0",
+    "unpdf": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
