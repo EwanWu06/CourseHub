@@ -288,6 +288,19 @@ test('notification history: list with unread count, mark read, send a test notic
   assert.match(r.items[0].title, /测试/);
 });
 
+test('status: schools, jobs, AI usage, backups and issues; a backup on demand', async () => {
+  const st = await json(await call('/api/status'));
+  assert.equal(st.app.app, 'course-hub');
+  assert.equal(st.schools[0].name, 'alpha');
+  assert.ok(st.jobs.some((j: { name: string; label: string }) => j.name === 'daily' && j.label === '日报'));
+  assert.equal(typeof st.ai.today.calls, 'number');
+  assert.ok(Array.isArray(st.issues));
+  assert.deepEqual(st.backups, []);
+  assert.equal((await json(await call('/api/backup', { method: 'POST' }))).created, true);
+  assert.equal((await json(await call('/api/status'))).backups.length, 1);
+  assert.equal((await json(await call('/api/backup', { method: 'POST' }))).created, false, 'one a day');
+});
+
 test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

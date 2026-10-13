@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { PORT, ROOT_DIR } from '../config.ts';
+import { PORT } from '../config.ts';
+import { APP_INFO } from './appinfo.ts';
 import type { DB } from '../db/index.ts';
 import type { ReportRow } from '../db/types.ts';
 import type { interactiveLogin } from '../auth/login.ts';
@@ -17,19 +16,11 @@ import { registerReports } from './routes/reports.ts';
 import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
 import { registerStatic } from './routes/static.ts';
+import { registerStatus } from './routes/status.ts';
 import { registerStudy } from './routes/study.ts';
 import { makeSyncStarter, registerSync } from './routes/sync.ts';
 import type { SyncHandle } from './routes/sync.ts';
 import { HttpError } from './routes/util.ts';
-
-const STARTED_AT = new Date().toISOString();
-const VERSION = (() => {
-  try {
-    return (JSON.parse(readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')) as { version?: string }).version ?? '0';
-  } catch {
-    return '0';
-  }
-})();
 
 export interface AppDeps {
   startLogin?: typeof interactiveLogin;
@@ -50,7 +41,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   });
 
   const starter = deps.starter ?? makeSyncStarter(db, deps.runSync, deps.syncOptions);
-  app.get('/api/health', (c) => c.json({ ok: true, app: 'course-hub', version: VERSION, pid: process.pid, startedAt: STARTED_AT }));
+  app.get('/api/health', (c) => c.json({ ok: true, ...APP_INFO }));
   registerOverview(app, db);
   registerItems(app, db);
   registerCourses(app, db);
@@ -60,6 +51,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   registerStudy(app, db, { enqueueGuide: deps.enqueueGuide });
   registerReports(app, db, { generate: deps.generateReport });
   registerNotices(app, db);
+  registerStatus(app, db);
   app.all('/api/*', (c) => c.json({ error: '不存在' }, 404));
   registerProxy(app, db);
   registerStatic(app);

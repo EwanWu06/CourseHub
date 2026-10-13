@@ -24,6 +24,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const schools = useApi<SchoolView[]>('/api/schools', { poll: 30_000 });
   const overview = useApi<Overview>('/api/overview', { poll: 120_000 });
   const notices = useApi<{ unread: number }>('/api/notices?limit=0', { poll: 30_000 });
+  const status = useApi<{ issues: unknown[] }>('/api/status', { poll: 120_000 });
   const wasRunning = useRef(false);
 
   useEffect(() => {
@@ -77,6 +78,12 @@ export function Layout({ children }: { children: ReactNode }) {
             {sync.data?.running ? '同步中…' : '立即同步'}
           </button>
           <span className="small muted">上次同步：{fmtRelative(lastSync)}</span>
+          <div className="side-links">
+            <Link to="/status" aria-current={path === '/status' ? 'page' : undefined}>
+              <Icon name="pulse" size={15} />系统状态{(status.data?.issues.length ?? 0) > 0 ? <span className="new-dot" title={`${status.data!.issues.length} 个问题`} /> : null}
+            </Link>
+            <Link to="/help" aria-current={path === '/help' ? 'page' : undefined}><Icon name="help" size={15} />帮助</Link>
+          </div>
         </div>
       </aside>
       <main className="main">{children}</main>
