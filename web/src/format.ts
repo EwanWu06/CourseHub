@@ -20,16 +20,16 @@ export function fmtDate(d: Date, now: Date = new Date()): string {
   return `${d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`} ${weekdayName(d)}`;
 }
 
-export function fmtDue(iso: string | null, now: Date = new Date()): string {
+export function fmtDue(iso: string | null, now: Date = new Date(), opts: { dateOnly?: boolean } = {}): string {
   if (!iso) return '无截止日期';
   const d = new Date(iso);
   const diff = dayIndex(d) - dayIndex(now);
-  const time = hhmm(d);
-  if (diff === 0) return `今天 ${time}`;
-  if (diff === 1) return `明天 ${time}`;
-  if (diff === -1) return `昨天 ${time}`;
-  if (diff >= 2 && diff <= 6) return `${weekdayName(d)} ${time}`;
-  return `${fmtDate(d, now)} ${time}`;
+  const time = opts.dateOnly ? '' : ` ${hhmm(d)}`;
+  if (diff === 0) return `今天${time}`;
+  if (diff === 1) return `明天${time}`;
+  if (diff === -1) return `昨天${time}`;
+  if (diff >= 2 && diff <= 6) return `${weekdayName(d)}${time}`;
+  return `${fmtDate(d, now)}${time}`;
 }
 
 export function fmtCountdown(iso: string | null, now: Date = new Date()): string | null {

@@ -6,7 +6,7 @@ import { all, insertRow, one, pick, placeholders, run, updateRow } from './sql.t
 import { getCourse } from './courses.ts';
 
 /** What a sync writes. Category and syllabus fields are owned by the classifier / syllabus pass / user. */
-export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note'>;
+export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note' | 'syllabus_time_known'>;
 
 const COLS = ['id', 'school_id', 'course_id', 'kind', 'title', 'due_at', 'end_at', 'unlock_at', 'lock_at', 'points',
   'html_url', 'provider', 'description_html', 'submission_types', 'sub_state', 'submitted_at', 'missing', 'late',
@@ -47,16 +47,17 @@ function filters(q: ListQuery): { where: string[]; params: Record<string, unknow
 /** Dated items ordered by due date. */
 export function listItems(db: DB, q: ListQuery = {}): ItemRow[] {
   const { where, params } = filters(q);
-  where.push('i.due_at IS NOT NULL');
-  if (q.from) { where.push('i.due_at >= $from'); params.from = q.from; }
-  if (q.to) { where.push('i.due_at < $to'); params.to = q.to; }
+  // Effective due date: Canvas first, else a date verified in the syllabus.
+  where.push('COALESCE(i.due_at, i.syllabus_date) IS NOT NULL');
+  if (q.from) { where.push('COALESCE(i.due_at, i.syllabus_date) >= $from'); params.from = q.from; }
+  if (q.to) { where.push('COALESCE(i.due_at, i.syllabus_date) < $to'); params.to = q.to; }
   return all<ItemRow>(db, `SELECT i.* FROM items i LEFT JOIN courses c ON c.id = i.course_id
-                           WHERE ${where.join(' AND ')} ORDER BY i.due_at, i.title`, params);
+                           WHERE ${where.join(' AND ')} ORDER BY COALESCE(i.due_at, i.syllabus_date), i.title`, params);
 }
 
 export function listUndated(db: DB, courseId?: string): ItemRow[] {
   const { where, params } = filters({ courseId });
-  where.push('i.due_at IS NULL');
+  where.push('i.due_at IS NULL AND i.syllabus_date IS NULL');
   return all<ItemRow>(db, `SELECT i.* FROM items i LEFT JOIN courses c ON c.id = i.course_id
                            WHERE ${where.join(' AND ')} ORDER BY i.course_id, i.title`, params);
 }
@@ -106,7 +107,7 @@ export function setItemFlags(db: DB, id: string, patch: { missing?: number; canv
 }
 
 export function itemToUpsert(row: ItemRow): ItemUpsert {
-  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, category: _c, category_source: _cs, syllabus_date: _sd, syllabus_note: _sn, ...rest } = row;
+  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, category: _c, category_source: _cs, syllabus_date: _sd, syllabus_note: _sn, syllabus_time_known: _st, ...rest } = row;
   return rest;
 }
 
@@ -114,10 +115,22 @@ export function setItemCategory(db: DB, id: string, category: string | null, sou
   run(db, 'UPDATE items SET category = $category, category_source = $source WHERE id = $id', { id, category, source });
 }
 
-export function setSyllabusDate(db: DB, id: string, date: string | null, note: string | null): void {
-  run(db, 'UPDATE items SET syllabus_date = $date, syllabus_note = $note WHERE id = $id', { id, date, note });
+export function setSyllabusDate(db: DB, id: string, date: string | null, note: string | null, timeKnown = false): void {
+  run(db, 'UPDATE items SET syllabus_date = $date, syllabus_note = $note, syllabus_time_known = $known WHERE id = $id', { id, date, note, known: timeKnown ? 1 : 0 });
 }
 
 export function setItemModule(db: DB, id: string, moduleId: string | null): void {
   run(db, 'UPDATE items SET module_id = $moduleId WHERE id = $id AND (module_id IS NOT $moduleId)', { id, moduleId });
+}
+
+/** Exams the syllabus mentions that have no Canvas item of their own. */
+export function upsertSyllabusExam(db: DB, row: { id: string; school_id: string; course_id: string; title: string; date: string; timeKnown: boolean; note: string; html_url: string | null }): void {
+  const now = nowIso();
+  if (!getItem(db, row.id)) {
+    insertRow(db, 'items', {
+      id: row.id, school_id: row.school_id, course_id: row.course_id, kind: 'event', title: row.title, provider: 'canvas',
+      source: 'syllabus', html_url: row.html_url, first_seen_at: now, updated_at: now, category: 'exam', category_source: 'syllabus',
+    });
+  }
+  updateRow(db, 'items', { title: row.title, removed: 0, html_url: row.html_url, syllabus_date: row.date, syllabus_note: row.note, syllabus_time_known: row.timeKnown ? 1 : 0, updated_at: now }, 'id = $__id', { __id: row.id });
 }

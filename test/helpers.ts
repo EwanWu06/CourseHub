@@ -3,6 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const created: string[] = [];
+
+// Safety net: tests must never reach the real `claude` (it would spend the user's subscription quota).
+process.env.COURSEHUB_CLAUDE_BIN ??= path.resolve(import.meta.dirname, 'fixtures/fake-claude.sh');
+if (!process.env.FAKE_CLAUDE_DIR) {
+  process.env.FAKE_CLAUDE_DIR = mkdtempSync(path.join(tmpdir(), 'fake-claude-default-'));
+  created.push(process.env.FAKE_CLAUDE_DIR);
+}
 process.on('exit', () => {
   for (const dir of created) rmSync(dir, { recursive: true, force: true });
 });

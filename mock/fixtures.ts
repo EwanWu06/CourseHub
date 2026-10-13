@@ -65,6 +65,14 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
   const monday = mondayOf(now);
   const weekStart = (weeksAgo: number) => atLocal(addDays(monday, -7 * weeksAgo), 0, 0).toISOString();
   const weeksAfter = (startWeeksAgo: number, weeks: number) => atLocal(addDays(monday, -7 * startWeeksAgo + 7 * weeks - 1), 23, 59).toISOString();
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  /** "October 21st" for a day relative to today, the way syllabi write dates. */
+  const spoken = (days: number) => {
+    const d = new Date(Date.parse(at(days, 12, 0)));
+    const n = d.getDate();
+    const suffix = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
+    return `${MONTHS[d.getMonth()]} ${n}${suffix}`;
+  };
   return variant === 'alpha' ? alpha() : beta();
 
   function alpha(): MockData {
@@ -140,6 +148,12 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
             + '<iframe src="https://www.youtube.com/embed/krebs"></iframe><script>alert(1)</script>',
         },
         { page_id: '61', url: 'week-7-overview', title: 'Week 7 Overview', body: '<p>Photosynthesis: light reactions and the Calvin cycle.</p>', updated_at: at(-1, 9, 0), front_page: false },
+        {
+          page_id: '62', url: 'class-schedule', title: 'Class Schedule (Updated When Needed)', updated_at: at(-3, 9, 0), front_page: false,
+          body: `<h2>Lecture Schedule</h2><table><tr><td>6</td><td>Cell Respiration</td></tr><tr><td>7</td><td>Photosynthesis</td></tr></table>`
+            + `<h3>Upcoming Exams</h3><ul><li>Knowledge Check 2, covering Chapters 5–6, will take place during lab on ${spoken(9)}.</li>`
+            + `<li>Lab Practical (in person) on ${spoken(16)}.</li></ul>`,
+        },
       ],
       files: [
         file('7001', 'Week6_Cell_Respiration.pdf', 'application/pdf', at(-8, 9, 0), makePdf([

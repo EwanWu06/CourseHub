@@ -42,3 +42,9 @@ test('matchRoute handles params and optional segments', () => {
   assert.deepEqual(matchRoute('/', '/'), {});
   assert.equal(matchRoute('/', '/settings'), null);
 });
+
+test('fmtDue can drop the time when only the day is known', () => {
+  assert.equal(fmtDue('2026-10-15T06:59:00Z', NOW, { dateOnly: true }), '周三');
+  assert.equal(fmtDue('2026-10-13T06:59:00Z', NOW, { dateOnly: true }), '今天');
+  assert.equal(fmtDue('2026-11-12T07:59:00Z', NOW, { dateOnly: true }), '11月11日 周三');
+});

@@ -337,6 +337,7 @@
   .cat-chip.is-user select { color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 3px; }
   .cat-chip.is-exam select { color: var(--seal); font-weight: 600; background-color: var(--seal-soft); border-radius: 999px; padding: 0 16px 0 8px; background-position: right 8px center, right 4px center; }
   .syllabus-note { font-size: 12px; color: var(--amber); margin-top: 3px; }
+  .from-syllabus { font-family: var(--font-body); font-size: 10.5px; padding: 1px 5px; margin-right: 6px; border-radius: 4px; background: var(--amber-soft); color: var(--amber); vertical-align: 1px; }
   .exam-card { border-color: color-mix(in oklab, var(--seal) 35%, var(--rule)); }
   .exam-card .kicker { color: var(--seal); }
 }

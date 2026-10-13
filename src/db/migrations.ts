@@ -244,4 +244,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE items ADD COLUMN syllabus_date TEXT;
   ALTER TABLE items ADD COLUMN syllabus_note TEXT;
   `,
+  // 4: whether a syllabus date includes a time of day
+  `
+  ALTER TABLE items ADD COLUMN syllabus_time_known INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

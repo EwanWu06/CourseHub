@@ -11,8 +11,9 @@ export type TaskStatus = 'done' | 'todo' | 'overdue' | 'missing' | 'past' | 'eve
 export interface TaskView {
   id: string; title: string; kind: ItemKind; provider: string; courseId: string | null; courseName: string | null;
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
-  points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual'; localDone: boolean;
+  points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
+  dueFromSyllabus: boolean; dueDateOnly: boolean;
 }
 
 const DONE_STATES = new Set(['submitted', 'graded', 'pending_review']);
@@ -30,7 +31,9 @@ export function taskStatus(row: ItemRow, now: Date): TaskStatus {
   if (row.kind === 'event') return 'event';
   if (row.local_done || row.canvas_done || row.excused || (row.sub_state && DONE_STATES.has(row.sub_state))) return 'done';
   if (row.missing) return 'missing';
-  if (!row.due_at || Date.parse(row.due_at) > now.getTime()) return 'todo';
+  const due = row.due_at ?? row.syllabus_date;
+  if (!due || Date.parse(due) > now.getTime()) return 'todo';
+  if (row.category === 'exam') return 'past'; // exams are sat, not submitted
   // Past due and not done. Only call it overdue when Canvas would actually expect an online submission.
   const t = types(row);
   if (t.length > 0 && t.every((x) => NOT_SUBMITTABLE.has(x))) return 'past';
@@ -71,9 +74,10 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
     return {
       id: row.id, title: row.title, kind: row.kind, provider: row.provider, courseId: course?.id ?? null,
       courseName: course ? courseDisplayName(course) : null, schoolId: school?.id ?? null,
-      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: row.due_at, htmlUrl: row.html_url,
+      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: row.due_at ?? row.syllabus_date, htmlUrl: row.html_url,
       points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
       category: row.category ?? null, categorySource: row.category_source ?? null, syllabusNote: row.syllabus_note ?? null,
+      dueFromSyllabus: !row.due_at && !!row.syllabus_date, dueDateOnly: !row.due_at && !!row.syllabus_date && !row.syllabus_time_known,
     };
   };
 }

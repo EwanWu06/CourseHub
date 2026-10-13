@@ -5,7 +5,7 @@ import type { TaskView } from '../web/src/types.ts';
 
 const NOW = new Date('2026-10-12T17:00:00Z'); // Mon 10:00 PDT
 function t(id: string, dueAt: string | null, p: Partial<TaskView> = {}): TaskView {
-  return { id, title: id, kind: 'assignment', provider: 'canvas', courseId: 'c', courseName: 'BIO 3', schoolId: 's', schoolName: 'S', color: '#00f', dueAt, htmlUrl: null, points: 10, status: 'todo', estMinutes: 45, source: 'api', localDone: false, category: null, categorySource: null, syllabusNote: null, ...p };
+  return { id, title: id, kind: 'assignment', provider: 'canvas', courseId: 'c', courseName: 'BIO 3', schoolId: 's', schoolName: 'S', color: '#00f', dueAt, htmlUrl: null, points: 10, status: 'todo', estMinutes: 45, source: 'api', localDone: false, category: null, categorySource: null, syllabusNote: null, dueFromSyllabus: false, dueDateOnly: false, ...p };
 }
 
 test('groupByDay orders local days and names today/tomorrow', () => {

@@ -10,6 +10,9 @@ import { keepAliveAll } from './auth/keepalive.ts';
 import { refreshSso } from './auth/login.ts';
 import { loadAuth } from './auth/store.ts';
 import { cleanTmp } from './content/download.ts';
+import { enqueueSyllabus } from './ai/syllabus.ts';
+import { listCourses } from './db/courses.ts';
+import { getSettings as readSettings } from './db/settings.ts';
 import type { SyncOptions } from './sync/index.ts';
 import { log } from './util/log.ts';
 
@@ -109,6 +112,8 @@ export function defaultJobs(db: DB, deps: { runSync: (opts: SyncOptions) => Prom
       isDue: (now, last, s) => isIntervalDue(now, last, s.syncIntervalHours, { start: s.syncWindowStart, end: s.syncWindowEnd }),
       run: async () => {
         await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
+        // Re-read syllabi whose sources changed (the analysis itself skips unchanged input).
+        if (readSettings(db).aiEnabled) for (const c of listCourses(db)) enqueueSyllabus(db, c.id);
       },
     },
     {

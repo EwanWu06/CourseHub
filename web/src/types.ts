@@ -5,8 +5,9 @@ export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'page' | 'note' | 
 export interface TaskView {
   id: string; title: string; kind: ItemKind; provider: string; courseId: string | null; courseName: string | null;
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
-  points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual'; localDone: boolean;
+  points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
+  dueFromSyllabus: boolean; dueDateOnly: boolean;
 }
 
 export interface LoginState { status: 'idle' | 'waiting' | 'success' | 'failed'; message: string; startedAt: string | null }
@@ -78,6 +79,9 @@ export interface TopicT { id: string; kind: 'announcement' | 'discussion'; title
 
 export interface GradesT { score: number | null; grade: string | null; htmlUrl: string; items: { id: string; title: string; kind: string; dueAt: string | null; points: number | null; score: number | null; grade: string | null; status: TaskStatus; htmlUrl: string | null; excused: boolean }[] }
 
-export interface SyllabusT { html: string | null; htmlUrl: string; files: FileT[] }
+export interface SyllabusT {
+  html: string | null; htmlUrl: string; files: FileT[];
+  analysis: { analyzedAt: string; error: string | null; summary: { examsApplied: number; examsRejected: number; categoriesApplied: number; weeksApplied: number; modulesApplied: number } | null } | null;
+}
 
 export interface ConversationT { id: string; school_id: string; subject: string; last_message: string | null; last_at: string | null; participants: string; context_name: string | null; workflow_state: string; html_url: string; schoolName: string; color: string }

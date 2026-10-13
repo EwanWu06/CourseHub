@@ -228,3 +228,10 @@ test('category can be corrected by hand and is validated', async () => {
   assert.notEqual(reset.categorySource, 'user', 'resetting hands the decision back to the automatic classifier');
   assert.equal(reset.category, 'homework');
 });
+
+test('syllabus analysis state is exposed and can be re-run on demand', async () => {
+  const syl = await json(await call('/api/courses/alpha:101/syllabus'));
+  assert.ok('analysis' in syl);
+  const res = await call('/api/courses/alpha:101/analyze', { method: 'POST' });
+  assert.equal(res.status, 202);
+});

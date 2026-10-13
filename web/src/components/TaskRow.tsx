@@ -84,7 +84,10 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
       </div>
       <div className="task-side">
         <div className="due-box">
-          {showDate ? <div className="due">{fmtDue(task.dueAt, now)}</div> : <div className="due">{task.dueAt ? fmtDue(task.dueAt, now).split(' ').at(-1) : ''}</div>}
+          <div className="due">
+            {task.dueFromSyllabus ? <span className="from-syllabus" title={task.syllabusNote ?? '日期来自教学大纲'}>大纲</span> : null}
+            {showDate ? fmtDue(task.dueAt, now, { dateOnly: task.dueDateOnly }) : task.dueDateOnly ? '时间见大纲' : task.dueAt ? fmtDue(task.dueAt, now).split(' ').at(-1) : ''}
+          </div>
           {countdown ? <div className={`countdown ${countdownTone(task, now)}`}>{countdown}</div> : done ? <div className="countdown done-label">{STATUS_LABEL.done}</div> : task.status === 'past' ? <div className="countdown">{task.source === 'ics' ? '状态未知' : STATUS_LABEL.past}</div> : null}
         </div>
         {seal ? <span className="seal" title={STATUS_LABEL[task.status]}>{seal}</span> : null}

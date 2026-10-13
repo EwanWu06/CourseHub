@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi } from '../api.ts';
+import { api, useApi } from '../api.ts';
 import { fmtBytes, fmtDate, fmtDateTime, fmtDue, fmtRelative } from '../format.ts';
 import { CanvasHtml } from '../components/CanvasHtml.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
@@ -22,6 +22,26 @@ const TABS = [
 ];
 
 const enc = encodeURIComponent;
+
+function SyllabusAnalysis({ id, analysis }: { id: string; analysis: SyllabusT['analysis'] }) {
+  const [queued, setQueued] = useState(false);
+  const rerun = async () => {
+    await api(`/api/courses/${enc(id)}/analyze`, { method: 'POST' });
+    setQueued(true);
+  };
+  const s = analysis?.summary;
+  return (
+    <div className="callout info" style={{ alignItems: 'center' }}>
+      <span className="grow">
+        🔎 <b>AI 读大纲</b>：
+        {analysis?.error ? <span style={{ color: 'var(--seal)' }}>上次失败（{analysis.error.slice(0, 60)}）</span>
+          : s ? <>找到并核对了 {s.examsApplied} 场考试{s.examsRejected ? `（另有 ${s.examsRejected} 条无法在原文核实，已忽略）` : ''}，修正了 {s.categoriesApplied} 个类别{s.weeksApplied ? `，整理了 ${s.weeksApplied} 周的主题` : ''} · {fmtRelative(analysis!.analyzedAt)}</>
+          : '还没有分析（同步后会自动进行）'}
+      </span>
+      <button type="button" className="btn btn-sm" disabled={queued} onClick={() => void rerun()}>{queued ? '已排队…' : '重新读取大纲'}</button>
+    </div>
+  );
+}
 
 function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
   const { data } = useApi<SyllabusT>(`/api/courses/${enc(id)}/syllabus`);
@@ -46,6 +66,7 @@ function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
       <Section title="教学大纲" note={data ? <ExtLink href={data.htmlUrl}>在 Canvas 打开</ExtLink> : null}>
         {!data ? <Spinner /> : (
           <>
+            <div style={{ marginBottom: 12 }}><SyllabusAnalysis id={id} analysis={data.analysis} /></div>
             {data.files.length ? (
               <div className="row" style={{ marginBottom: 12 }}>
                 {data.files.map((f) => <ExtLink key={f.id} href={f.html_url} className="btn btn-sm">📄 {f.name}</ExtLink>)}

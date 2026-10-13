@@ -9,6 +9,7 @@ import type { CourseRow, ItemRow } from '../../db/types.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
 import { currentWeek } from '../../weeks/build.ts';
 import { courseDisplayName } from '../../util/course.ts';
+import { enqueueSyllabus, syllabusState } from '../../ai/syllabus.ts';
 import { HttpError, htmlRewriter, readJson } from './util.ts';
 
 const WEEK = 7 * 86_400_000;
@@ -147,7 +148,14 @@ export function registerCourses(app: Hono, db: DB): void {
       html: rewrite(course.syllabus_html),
       htmlUrl: `${course.html_url}/assignments/syllabus`,
       files: listFiles(db, course.id).filter((f) => /syllabus|schedule|calendar|大纲/i.test(f.name)),
+      analysis: syllabusState(db, course.id),
     });
+  });
+
+  app.post('/api/courses/:id/analyze', (c) => {
+    const course = requireCourse(db, c.req.param('id'));
+    enqueueSyllabus(db, course.id, { force: true });
+    return c.json({ status: 'queued' }, 202);
   });
 
   app.get('/api/inbox', (c) => {
