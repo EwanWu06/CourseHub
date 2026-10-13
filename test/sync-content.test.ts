@@ -133,3 +133,9 @@ test('modules deleted in Canvas disappear locally', async () => {
     await mock.close();
   }
 });
+
+test('slide downloads pause when the disk is nearly full', async () => {
+  const { extractPendingFiles } = await import('../src/content/pipeline.ts');
+  const ctx = { school: { id: 'nobody' }, firstSync: false } as unknown as Parameters<typeof extractPendingFiles>[0];
+  assert.equal(await extractPendingFiles(ctx, { diskFree: () => 500 * 1024 ** 2 }), 0);
+});

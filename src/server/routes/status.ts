@@ -13,13 +13,14 @@ import type { AiRunRow } from '../../db/types.ts';
 import { NOTIFIER_APP } from '../../notify/mac.ts';
 import { atLocal, localDateStr } from '../../util/time.ts';
 import { APP_INFO } from '../appinfo.ts';
+import { LOW_DISK_BYTES, diskFreeBytes } from '../../maintenance.ts';
 
 export const JOB_LABELS: Record<string, string> = {
   keepalive: '保持登录', daily: '日报', weekly: '周报', sync: '同步', reminders: '截止提醒', 'report-ai': '补全 AI 安排',
   guides: '学习讲解', 'sso-refresh': '刷新学校登录', backup: '数据库备份', cleanup: '清理',
 };
 
-export interface Issue { kind: 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
+export interface Issue { kind: 'disk' | 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
 
 interface IssueInput {
   now: Date;
@@ -28,11 +29,15 @@ interface IssueInput {
   latestBackup: string | null; // YYYY-MM-DD
   applet: boolean;
   lastAi: { ok: boolean; error: string | null; at: string } | null;
+  diskFreeBytes?: number | null;
 }
 
 export function statusIssues(x: IssueInput): Issue[] {
   const out: Issue[] = [];
   const hoursSince = (iso: string) => (x.now.getTime() - Date.parse(iso)) / 3_600_000;
+  if (x.diskFreeBytes != null && x.diskFreeBytes < LOW_DISK_BYTES) {
+    out.push({ kind: 'disk', text: `这台 Mac 只剩 ${(x.diskFreeBytes / 1024 ** 3).toFixed(1)} GB 空间：太少会让同步、备份和课件读取失败，清理一下磁盘吧` });
+  }
   for (const s of x.schools) if (s.status === 'needs_login') out.push({ kind: 'login', text: `${s.name} 需要重新登录（自动续期没成功）`, action: 'login' });
   for (const s of x.schools) {
     if (s.status === 'ok' && s.lastOkAt && hoursSince(s.lastOkAt) > 8) {
@@ -69,6 +74,7 @@ export function buildStatus(db: DB, now: Date = new Date()) {
     'SELECT count(*) AS calls, sum(ok = 0) AS failed, sum(input_tokens) AS input, sum(output_tokens) AS output FROM ai_runs WHERE started_at >= $since', { since })!;
   const last = one<AiRunRow>(db, 'SELECT * FROM ai_runs ORDER BY id DESC LIMIT 1');
   const backups = listBackups().map(({ date, bytes }) => ({ date, bytes }));
+  const disk = diskFreeBytes();
   const applet = existsSync(NOTIFIER_APP);
   const s = getSettings(db);
   const lastAi = last ? { ok: !!last.ok, error: last.error, at: last.started_at, purpose: last.purpose } : null;
@@ -81,8 +87,9 @@ export function buildStatus(db: DB, now: Date = new Date()) {
       today: { calls: today.calls, failed: today.failed ?? 0, inputTokens: today.input ?? 0, outputTokens: today.output ?? 0 }, last: lastAi,
     },
     backups,
+    disk: { freeBytes: disk },
     notifier: { applet, unread: unreadNotices(db) },
-    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi }),
+    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk }),
   };
 }
 

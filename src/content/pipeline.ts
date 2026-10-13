@@ -5,11 +5,19 @@ import { filesNeedingText, setFileText } from '../db/content.ts';
 import { errorText } from '../sync/context.ts';
 import type { SyncContext } from '../sync/context.ts';
 import { log } from '../util/log.ts';
+import { diskFreeBytes } from '../maintenance.ts';
+
+const MIN_FREE_FOR_DOWNLOADS = 1024 ** 3;
 import { MAX_DOWNLOAD_BYTES, FileTooLargeError, withTempDownload } from './download.ts';
 import { extractFile, isExtractable, UnsupportedFileError } from './extract.ts';
 import { saveText } from './textstore.ts';
 
-export async function extractPendingFiles(ctx: SyncContext, opts: { limit?: number } = {}): Promise<number> {
+export async function extractPendingFiles(ctx: SyncContext, opts: { limit?: number; diskFree?: () => number | null } = {}): Promise<number> {
+  const free = (opts.diskFree ?? diskFreeBytes)();
+  if (free !== null && free < MIN_FREE_FOR_DOWNLOADS) {
+    log('warn', `disk nearly full (${Math.round(free / 1024 ** 2)} MB free): not downloading slides this time`);
+    return 0;
+  }
   const limit = opts.limit ?? (ctx.firstSync ? 40 : 20);
   const prefix = `${ctx.school.id}:f:`;
   let processed = 0;

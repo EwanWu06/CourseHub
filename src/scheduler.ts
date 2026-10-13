@@ -18,6 +18,8 @@ import type { SyncOptions } from './sync/index.ts';
 import { flushChangeNotices } from './notify/changes.ts';
 import { runReminders } from './notify/reminders.ts';
 import { backupDb } from './db/backup.ts';
+import { maintainDb, pruneOldData, trimBrowserCache } from './maintenance.ts';
+import { withChromeLock } from './auth/chrome.ts';
 import { pruneNotices } from './db/notices.ts';
 import { getReport } from './db/reports.ts';
 import { weeklyPeriod } from './reports/data.ts';
@@ -245,10 +247,14 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
       name: 'cleanup',
       timeoutMs: 10 * 60_000,
       isDue: (now, last) => isSlotDue(now, last, { hour: 3, minute: 0 }),
-      run: async () => {
+      run: async (now) => {
         cleanTmp();
         pruneRuns(db, new Date(Date.now() - 90 * DAY).toISOString());
         pruneNotices(db, new Date(Date.now() - 60 * DAY).toISOString());
+        const pruned = pruneOldData(db, now);
+        const upkeep = maintainDb(db, now);
+        const cache = await withChromeLock(async () => trimBrowserCache()); // never while a renewal uses the profile
+        log('info', 'nightly cleanup', { pruned, upkeep, cacheFreedMB: Math.round(cache.freedBytes / 1024 ** 2) });
       },
     },
   ];

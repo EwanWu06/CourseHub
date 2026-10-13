@@ -186,3 +186,12 @@ test('a report-ai job tries every 15 minutes to fill in a missing AI part', asyn
   await job.run(at('2026-10-12T17:00:00Z'));
   assert.deepEqual(calls, ['fill']);
 });
+
+test('the nightly cleanup also prunes old bookkeeping and keeps the database tidy', async () => {
+  tmpDataDir();
+  const db = openDb();
+  db.prepare("INSERT INTO changes (school_id, course_id, kind, ref_id, summary, data, created_at, notified) VALUES ('s', NULL, 'announcement', 'old', 'old', '{}', '2025-01-01T00:00:00.000Z', 1)").run();
+  const job = defaultJobs(db, { runSync: async () => {}, onLoginNeeded: () => {} }).find((j) => j.name === 'cleanup')!;
+  await job.run(at('2026-10-12T10:00:00Z'));
+  assert.equal((db.prepare("SELECT count(*) AS n FROM changes WHERE ref_id = 'old'").get() as { n: number }).n, 0);
+});

@@ -32,3 +32,12 @@ test('a healthy setup has no issues', () => {
     jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: { ok: true, error: null, at: hoursAgo(2) },
   }), []);
 });
+
+test('low disk space is an issue before it becomes a crash', () => {
+  const issues = statusIssues({
+    now, schools: [], jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: null, diskFreeBytes: 1.5 * 1024 ** 3,
+  });
+  assert.equal(issues[0].kind, 'disk');
+  assert.match(issues[0].text, /1\.5 GB/);
+  assert.deepEqual(statusIssues({ now, schools: [], jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: null, diskFreeBytes: 20 * 1024 ** 3 }), []);
+});
