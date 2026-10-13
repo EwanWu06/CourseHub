@@ -94,3 +94,17 @@ export function markRemovedExcept(db: DB, courseId: string, kinds: ItemKind[], k
   for (const r of gone) run(db, 'UPDATE items SET removed = 1, updated_at = $now WHERE id = $id', { id: r.id, now: nowIso() });
   return gone.length;
 }
+
+/** Small flag updates coming from secondary endpoints (planner, missing_submissions). */
+export function setItemFlags(db: DB, id: string, patch: { missing?: number; canvas_done?: number; sub_state?: string | null }): void {
+  const row = getItem(db, id);
+  if (!row) return;
+  const changed = Object.entries(patch).filter(([k, v]) => (row as unknown as Record<string, unknown>)[k] !== v);
+  if (changed.length === 0) return;
+  updateRow(db, 'items', { ...Object.fromEntries(changed), updated_at: nowIso() }, 'id = $__id', { __id: id });
+}
+
+export function itemToUpsert(row: ItemRow): ItemUpsert {
+  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, ...rest } = row;
+  return rest;
+}

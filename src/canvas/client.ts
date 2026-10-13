@@ -93,7 +93,7 @@ const RETRY_5XX = [500, 1500];
 export class CanvasClient {
   readonly baseUrl: string;
   requestCount = 0;
-  private auth: CanvasAuth;
+  readonly auth: CanvasAuth;
   private fetchImpl: typeof fetch;
   private sleep: (ms: number) => Promise<void>;
   private maxPages: number;
