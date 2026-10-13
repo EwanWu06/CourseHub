@@ -42,6 +42,8 @@ function blankItem(ctx: SyncContext, id: string, course: CourseRow | undefined, 
 export function assignmentRow(ctx: SyncContext, course: CourseRow, a: CanvasAssignment): ItemUpsert {
   const id = `${ctx.school.id}:a:${a.id}`;
   const s = a.submission ?? null;
+  if (a.quiz_id) ctx.quizToAssignment.set(String(a.quiz_id), a.id);
+  if (a.discussion_topic?.id) ctx.topicToAssignment.set(String(a.discussion_topic.id), a.id);
   return {
     ...blankItem(ctx, id, course, assignmentKind(a), a.name),
     due_at: a.due_at ?? null, unlock_at: a.unlock_at ?? null, lock_at: a.lock_at ?? null, points: a.points_possible ?? null,

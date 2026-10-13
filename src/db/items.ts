@@ -108,3 +108,7 @@ export function itemToUpsert(row: ItemRow): ItemUpsert {
   const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, ...rest } = row;
   return rest;
 }
+
+export function setItemModule(db: DB, id: string, moduleId: string | null): void {
+  run(db, 'UPDATE items SET module_id = $moduleId WHERE id = $id AND (module_id IS NOT $moduleId)', { id, moduleId });
+}

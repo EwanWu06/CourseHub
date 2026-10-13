@@ -15,6 +15,7 @@ import type { SyncContext, SyncStats } from './context.ts';
 import { syncCourses } from './courses.ts';
 import { markCourseRemovals, syncAssignments, syncCalendarEvents, syncMissing, syncPlanner, syncQuizzes } from './items.ts';
 import { mergeIcs } from './icsMerge.ts';
+import { syncCourseContent, syncInbox } from './content.ts';
 
 export interface SyncOptions {
   schoolId?: string;
@@ -50,7 +51,10 @@ async function guarded(ctx: SyncContext, label: string, fn: () => Promise<unknow
 }
 
 async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Date, stats: SyncStats): Promise<void> {
-  const ctx: SyncContext = { db, school, client, now, firstSync: !school.last_ok_at, stats, complete: new Set() };
+  const ctx: SyncContext = {
+    db, school, client, now, firstSync: !school.last_ok_at, stats, complete: new Set(),
+    quizToAssignment: new Map(), topicToAssignment: new Map(),
+  };
   const profile = await client.get<CanvasProfile>('/api/v1/users/self/profile');
   updateSchool(db, school.id, { user_name: profile.name ?? school.user_name, ics_url: profile.calendar?.ics ?? school.ics_url });
 
@@ -62,10 +66,12 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
       markCourseRemovals(ctx, course, assignments, quizzes);
       ctx.complete.add(course.id);
     });
+    await guarded(ctx, `${course.name} 内容`, () => syncCourseContent(ctx, course));
   }
   await guarded(ctx, '日历事件', () => syncCalendarEvents(ctx, courses));
   await guarded(ctx, '待办计划', () => syncPlanner(ctx, courses));
   await guarded(ctx, '缺交列表', () => syncMissing(ctx));
+  await guarded(ctx, '收件箱', () => syncInbox(ctx));
 
   const icsUrl = getSchool(db, school.id)?.ics_url;
   if (icsUrl) await guarded(ctx, '日历订阅', async () => mergeIcs({ ...ctx, apiOk: true }, await fetchIcs(icsUrl)));

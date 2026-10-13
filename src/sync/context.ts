@@ -12,6 +12,8 @@ export interface SyncContext {
   firstSync: boolean;
   stats: SyncStats;
   complete: Set<string>; // course ids whose assignment listing fully succeeded
+  quizToAssignment: Map<string, string>; // canvas quiz id → canvas assignment id
+  topicToAssignment: Map<string, string>; // canvas discussion topic id → canvas assignment id
 }
 
 export function newStats(): SyncStats {
