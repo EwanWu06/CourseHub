@@ -22,6 +22,8 @@ export function paths() {
     notify: path.join(d, 'notify'),
     aiWork: path.join(d, 'ai-work'),
     backups: path.join(d, 'backups'),
+    watchdogNote: path.join(d, 'watchdog.json'),
+    achieveProfile: path.join(d, 'tmp', 'achieve-chrome'),
   };
 }
 

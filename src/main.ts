@@ -18,6 +18,7 @@ import { resumeQueuedGuides } from './ai/guide.ts';
 import { resumePendingQuestions } from './ai/ask.ts';
 import { probeInstance } from './server/instance.ts';
 import { log } from './util/log.ts';
+import { consumeWatchdogNote, killOrphans, startWatchdog } from './watchdog.ts';
 
 // Stay up: log stray promise failures; on a truly unexpected exception exit so launchd restarts a clean process.
 process.on('unhandledRejection', (reason) => log('error', 'unhandled promise rejection', reason));
@@ -37,6 +38,9 @@ if (existing === 'other') {
   log('error', `port ${PORT} is taken by another program; Course Hub can't start`);
   process.exit(1);
 }
+// Chromes an earlier Course Hub started and left running (crash, forced restart) hold profiles and memory
+const orphans = killOrphans([paths().profile, paths().achieveProfile]);
+if (orphans) log('warn', `stopped ${orphans} Chrome process(es) an earlier Course Hub left running`);
 cleanTmp();
 // A damaged database is set aside and the newest good daily backup restored before anything opens it.
 let repaired: { restored: string | null } | null = null;
@@ -49,6 +53,9 @@ if (dbState === 'corrupt') {
 }
 const db = openDb();
 setNoticeRecorder((n) => recordNotice(db, n));
+if (consumeWatchdogNote(db, paths().watchdogNote)) log('warn', 'the previous run was stuck and was restarted by the watchdog');
+// a wedged main thread is killed after 2 minutes so launchd starts a fresh one
+if (!process.env.COURSEHUB_NO_WATCHDOG) startWatchdog({ notePath: paths().watchdogNote });
 const onLoginNeeded = (school: SchoolRow) => void notify(loginNeededNotice(school));
 const starter = makeSyncStarter(db, syncAll, { onLoginNeeded });
 const app = createApp(db, { starter });

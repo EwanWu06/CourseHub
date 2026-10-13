@@ -1,12 +1,13 @@
 // Real Chrome against a local stand-in for the Canvas → publisher → Achieve launch chain.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHttp } from '../helpers.ts';
+import { startHttp, tmpDataDir } from '../helpers.ts';
 import { readAchieveInChrome } from '../../src/platforms/achieve.ts';
 
 const UUID = 'c0ffee00-0000-4000-8000-000000000001';
 
 async function chain(opts: { reachAchieve?: boolean; itemCount?: number } = {}) {
+  tmpDataDir(); // the throwaway profile lives in the data dir
   const seen: string[] = [];
   const achieve = await startHttp((req, res) => {
     seen.push(`${req.method} ${req.url}`);

@@ -5,7 +5,8 @@
 // the student's timeline (what Achieve's week outline shows) and the completion statuses.
 import { SessionExpiredError } from '../canvas/client.ts';
 import { DEFAULT_USER_AGENT } from '../canvas/client.ts';
-import { chromeBin } from '../config.ts';
+import { rmSync } from 'node:fs';
+import { chromeBin, paths } from '../config.ts';
 import type { DB } from '../db/index.ts';
 import { listCourses } from '../db/courses.ts';
 import { courseDisplayName } from '../util/course.ts';
@@ -111,9 +112,12 @@ const PRODUCTION: AchieveHosts = {
 /** Follows the LTI launch in a throwaway headless Chrome, then reads the two lists with the session it got. */
 export async function readAchieveInChrome(launchUrl: string, courseUuid: string, hosts: AchieveHosts = PRODUCTION, timeoutMs = 45_000): Promise<AchieveData> {
   const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({ executablePath: chromeBin(), headless: true });
+  // our own profile dir: the session lives there only for this read and the dir is deleted right after;
+  // a Chrome left behind by a crash is recognisable by it and stopped on the next start
+  const profileDir = paths().achieveProfile;
+  rmSync(profileDir, { recursive: true, force: true });
+  const context = await chromium.launchPersistentContext(profileDir, { executablePath: chromeBin(), headless: true, userAgent: DEFAULT_USER_AGENT });
   try {
-    const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
     // Achieve's web app writes things as it starts (enrollment checks…), so it is never run; the launch is plain navigation
     await context.route(hosts.app, (route) => route.abort());
     await context.route(/\.(png|jpe?g|gif|svg|webp|woff2?|ttf|css)(\?|$)/i, (route) => route.abort());
@@ -142,7 +146,8 @@ export async function readAchieveInChrome(launchUrl: string, courseUuid: string,
       statuses: Object.fromEntries(statuses.assignmentCompletionStatuses.map((s) => [s.assignment_id, s.status ?? ''])),
     };
   } finally {
-    await browser.close();
+    await context.close().catch(() => undefined);
+    rmSync(profileDir, { recursive: true, force: true });
   }
 }
 
