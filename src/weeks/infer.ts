@@ -72,3 +72,18 @@ export function assignModuleWeeks(mods: ModuleWeekInput[], week1: string | null)
   }
   return out;
 }
+
+/**
+ * Corrects week 1 using dated work inside "Week N" modules: each due date implies a week-1 Monday; if at least
+ * two samples and half of them agree on one Monday, that wins (term dates are often earlier than the class).
+ */
+export function calibrateWeek1(week1: string | null, samples: { week: number; due: string }[]): string | null {
+  if (samples.length < 2) return week1;
+  const votes = new Map<string, number>();
+  for (const s of samples) {
+    const implied = addDays(mondayOf(s.due), -7 * (s.week - 1));
+    votes.set(implied, (votes.get(implied) ?? 0) + 1);
+  }
+  const [best, count] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
+  return count >= 2 && count >= samples.length / 2 ? best : week1;
+}

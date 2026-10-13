@@ -10,7 +10,7 @@ import { listModules, setModuleWeek } from '../src/db/content.ts';
 import { listWeeks } from '../src/db/study.ts';
 import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
-import { parseWeekRange, inferWeek1, weekOf, assignModuleWeeks } from '../src/weeks/infer.ts';
+import { parseWeekRange, inferWeek1, weekOf, assignModuleWeeks, calibrateWeek1 } from '../src/weeks/infer.ts';
 import { rebuildWeeks, currentWeek, lastWeek } from '../src/weeks/build.ts';
 import { mondayOf } from '../src/util/time.ts';
 
@@ -125,4 +125,18 @@ test('rebuildWeeks keeps AI (syllabus) module assignments and week topics', asyn
   } finally {
     await mock.close();
   }
+});
+
+test('calibrateWeek1 trusts "Week N" modules over a too-early term start', () => {
+  // CHEM 102 (LACCD): term starts Aug 17, but "Week 2" work is due Sep 13 and "Week 7" work Oct 18
+  const samples = [
+    { week: 2, due: '2026-09-14T06:59:00Z' }, // Sun Sep 13 23:59 PDT
+    { week: 4, due: '2026-09-28T06:59:00Z' },
+    { week: 7, due: '2026-10-19T06:59:00Z' },
+    { week: 7, due: '2026-10-14T06:59:00Z' },
+  ];
+  assert.equal(calibrateWeek1('2026-08-17', samples), '2026-08-31');
+  assert.equal(calibrateWeek1('2026-08-31', samples), '2026-08-31');
+  assert.equal(calibrateWeek1('2026-08-17', samples.slice(0, 1)), '2026-08-17', 'one sample is not enough');
+  assert.equal(calibrateWeek1('2026-08-17', [{ week: 2, due: '2026-09-14T06:59:00Z' }, { week: 3, due: '2026-10-30T06:59:00Z' }]), '2026-08-17', 'no agreement');
 });

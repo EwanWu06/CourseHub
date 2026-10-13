@@ -6,7 +6,7 @@ import { all, one } from '../db/sql.ts';
 import { listWeeks, replaceWeeks } from '../db/study.ts';
 import type { WeekRow } from '../db/types.ts';
 import { addDays } from '../util/time.ts';
-import { assignModuleWeeks, inferWeek1, weekOf } from './infer.ts';
+import { assignModuleWeeks, calibrateWeek1, inferWeek1, parseWeekRange, weekOf } from './infer.ts';
 
 const MAX_WEEKS = 30;
 
@@ -16,14 +16,17 @@ export function rebuildWeeks(db: DB, courseId: string): void {
   const modules = listModules(db, courseId);
   const dated = all<{ module_id: string | null; due_at: string }>(db,
     'SELECT module_id, due_at FROM items WHERE course_id = $courseId AND due_at IS NOT NULL AND removed = 0', { courseId });
-  const week1 = inferWeek1({
-    courseStart: course.start_at, termStart: null,
-    dates: [...dated.map((d) => d.due_at), ...modules.map((m) => m.unlock_at).filter((u): u is string => !!u)],
-  });
-  setCourseWeek1(db, courseId, week1);
-
   const dueByModule = new Map<string, string[]>();
   for (const d of dated) if (d.module_id) dueByModule.set(d.module_id, [...(dueByModule.get(d.module_id) ?? []), d.due_at]);
+  const samples = modules.flatMap((m) => {
+    const w = parseWeekRange(m.name);
+    return w && w.start === w.end ? (dueByModule.get(m.id) ?? []).map((due) => ({ week: w.start, due })) : [];
+  });
+  const week1 = calibrateWeek1(inferWeek1({
+    courseStart: course.start_at, termStart: null,
+    dates: [...dated.map((d) => d.due_at), ...modules.map((m) => m.unlock_at).filter((u): u is string => !!u)],
+  }), samples);
+  setCourseWeek1(db, courseId, week1);
   const assigned = assignModuleWeeks(modules.map((m) => ({ id: m.id, name: m.name, unlockAt: m.unlock_at, dueDates: dueByModule.get(m.id) ?? [] })), week1);
   for (const m of modules) {
     if (m.week_source === 'syllabus') continue; // AI mapping from the syllabus wins over heuristics
