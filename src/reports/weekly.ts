@@ -76,6 +76,7 @@ export function weeklyNotice(r: WeeklyReport, id: string, now: Date): Notice {
   if (w.next.exams.length) parts.push(`考试：${w.next.exams.slice(0, 2).map((t) => `${taskLabel(t)}（${weekdayZh(localDateStr(new Date(t.dueAt!)))}）`).join('、')}`);
   if (!parts.length) parts.push(`${when}比较轻松`);
   return {
+    kind: 'weekly',
     title: `${when}：${deadlines} 项截止${exams ? ` · ${exams} 场考试` : ''}`, subtitle: r.ai?.headline, body: parts.join(' · '),
     url: `http://127.0.0.1:${PORT}/reports/${id}`,
   };

@@ -43,23 +43,23 @@ export async function flushChangeNotices(db: DB, now: Date = new Date()): Promis
       const label = `${course} ${t.title}`.trim();
       if (ch.kind === 'due_changed') {
         if (!data.from || !data.to || Date.parse(data.to) >= Date.parse(data.from)) continue;
-        found.push({ rank: 0, label, notice: { title: '截止时间提前了', body: `${label}：${describeDue(data.from, now)} → ${describeDue(data.to, now)}`, url: t.htmlUrl ?? HOME } });
+        found.push({ rank: 0, label, notice: { kind: 'change', title: '截止时间提前了', body: `${label}：${describeDue(data.from, now)} → ${describeDue(data.to, now)}`, url: t.htmlUrl ?? HOME } });
       } else {
         const due = row.due_at ?? data.due_at;
         const ms = due ? Date.parse(due) - now.getTime() : -1;
         if (!due || ms < 0 || ms > 48 * 3_600_000) continue;
-        found.push({ rank: 1, label, notice: { title: '新作业 · 48 小时内截止', body: `${label} · ${describeDue(due, now)}`, url: t.htmlUrl ?? HOME } });
+        found.push({ rank: 1, label, notice: { kind: 'change', title: '新作业 · 48 小时内截止', body: `${label} · ${describeDue(due, now)}`, url: t.htmlUrl ?? HOME } });
       }
     } else if (ch.kind === 'announcement') {
       const topic = getTopic(db, ch.ref_id);
       if (!topic) continue;
-      found.push({ rank: 2, label: `${course}：${topic.title}`, notice: { title: `新公告 · ${course}`, body: topic.title, url: topic.html_url } });
+      found.push({ rank: 2, label: `${course}：${topic.title}`, notice: { kind: 'change', title: `新公告 · ${course}`, body: topic.title, url: topic.html_url } });
     }
   }
   found.sort((a, b) => a.rank - b.rank);
   const shown = found.slice(0, MAX_SHOWN);
   const rest = found.slice(MAX_SHOWN);
   for (const f of shown) await notify(f.notice);
-  if (rest.length) await notify({ title: `还有 ${rest.length} 条更新`, body: rest.slice(0, 3).map((f) => f.label).join('；'), url: HOME });
+  if (rest.length) await notify({ kind: 'change', title: `还有 ${rest.length} 条更新`, body: rest.slice(0, 3).map((f) => f.label).join('；'), url: HOME });
   return shown.length + (rest.length ? 1 : 0);
 }

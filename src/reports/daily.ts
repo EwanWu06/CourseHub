@@ -91,7 +91,7 @@ export function dailyNotice(r: DailyReport, id: string, now: Date): Notice {
   if (exam) parts.push(`考试：${taskLabel(exam)} ${describeDue(exam.dueAt, now, { dateOnly: exam.dueDateOnly })}`);
   if (d.loginNeeded.length) parts.push(`需要重新登录：${d.loginNeeded.map((s) => s.name).join('、')}`);
   if (!parts.length) parts.push(d.totals.todo ? `本周还有 ${d.totals.todo} 项，${hoursLabel(d.totals.minutes)}` : '今天比较轻松，可以提前做后面的作业');
-  return { title: dailyTitle(d), subtitle: r.ai?.headline, body: parts.join(' · '), url: `http://127.0.0.1:${PORT}/reports/${id}` };
+  return { kind: 'daily', title: dailyTitle(d), subtitle: r.ai?.headline, body: parts.join(' · '), url: `http://127.0.0.1:${PORT}/reports/${id}` };
 }
 
 export async function generateDaily(db: DB, opts: { now?: Date; ai?: boolean; notify?: boolean } = {}): Promise<ReportRow> {

@@ -506,6 +506,20 @@
   }
 }
 
+@layer components {
+  .count-soft { background: var(--ink-2); }
+  .notice-log { border-top: 1px solid var(--rule-strong); }
+  .notice-day { font-family: var(--font-zh); font-size: 15px; font-weight: 600; color: var(--muted); margin: 18px 0 6px; letter-spacing: .1em; }
+  .notice-row { align-items: flex-start; gap: 12px; text-decoration: none; color: inherit; border-bottom: 1px dashed var(--rule); padding: 12px 4px; }
+  .notice-row:hover b { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-strong); }
+  .notice-body { display: block; color: var(--ink-2); font-size: 14px; margin-top: 2px; }
+  .notice-kind { flex: none; min-width: 3.2em; text-align: center; }
+  .kind-reminder { background: color-mix(in oklab, var(--amber) 18%, var(--card)); }
+  .kind-change { background: color-mix(in oklab, var(--moss) 16%, var(--card)); }
+  .kind-login { background: color-mix(in oklab, var(--seal) 16%, var(--card)); }
+  .new-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--seal); flex: none; margin-top: 7px; }
+}
+
 @layer utilities {
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nowrap { white-space: nowrap; }

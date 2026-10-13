@@ -10,9 +10,16 @@ import { log } from '../util/log.ts';
 
 const execFileAsync = promisify(execFile);
 
-export interface Notice { title: string; subtitle?: string; body: string; url?: string }
+export type NoticeKind = 'reminder' | 'change' | 'daily' | 'weekly' | 'login' | 'system';
+export interface Notice { title: string; subtitle?: string; body: string; url?: string; kind?: NoticeKind }
 
 let override: ((n: Notice) => Promise<void>) | null = null;
+let recorder: ((n: Notice) => void) | null = null;
+
+/** Every notice is also kept in the app (main.ts records them in the database). */
+export function setNoticeRecorder(fn: ((n: Notice) => void) | null): void {
+  recorder = fn;
+}
 let chain: Promise<void> = Promise.resolve();
 
 export function setNotifier(fn: ((n: Notice) => Promise<void>) | null): void {
@@ -58,7 +65,13 @@ async function osascript(n: Notice): Promise<void> {
 }
 
 export function notify(n: Notice): Promise<void> {
-  const send = override ?? deliver;
+  try {
+    recorder?.(n);
+  } catch (err) {
+    log('warn', 'could not record notice', err);
+  }
+  // the test suite never shows real banners
+  const send = override ?? (process.env.COURSEHUB_NO_NOTIFY === '1' ? async () => undefined : deliver);
   chain = chain
     .then(() => send(n))
     .catch((err) => log('warn', 'notification failed', err))
@@ -68,6 +81,7 @@ export function notify(n: Notice): Promise<void> {
 
 export function loginNeededNotice(school: { name: string }): Notice {
   return {
+    kind: 'login',
     title: `需要重新登录：${school.name}`,
     body: '自动续期没成功。打开 Course Hub 设置页点「重新登录」即可（期间截止日期由日历订阅兜底）。',
     url: `http://127.0.0.1:${PORT}/settings`,

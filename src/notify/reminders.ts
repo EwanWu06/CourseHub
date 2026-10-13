@@ -25,13 +25,13 @@ function when(t: TaskView, now: Date): string {
 function single(d: Due, now: Date): Notice {
   const t = d.task;
   const title = d.exam ? `考试：${when(t, now)}` : d.key !== EVE && Number(d.key) <= 6 ? `${d.key} 小时内截止` : `${when(t, now)} 截止`;
-  return { title, body: `${t.courseName ?? ''} · ${t.title}`, url: t.htmlUrl ?? `http://127.0.0.1:${PORT}/courses/${t.courseId ?? ''}` };
+  return { kind: 'reminder', title, body: `${t.courseName ?? ''} · ${t.title}`, url: t.htmlUrl ?? `http://127.0.0.1:${PORT}/courses/${t.courseId ?? ''}` };
 }
 
 function grouped(key: string, ds: Due[], now: Date): Notice {
   const label = key === EVE ? `${when(ds[0].task, now)}截止` : `${key} 小时内截止`;
   const names = ds.slice(0, 3).map((d) => taskLabel(d.task)).join('、');
-  return { title: `${ds.length} 项 ${label}`, body: ds.length > 3 ? `${names} 等` : names, url: `http://127.0.0.1:${PORT}/deadlines` };
+  return { kind: 'reminder', title: `${ds.length} 项 ${label}`, body: ds.length > 3 ? `${names} 等` : names, url: `http://127.0.0.1:${PORT}/deadlines` };
 }
 
 export async function runReminders(db: DB, now: Date): Promise<number> {

@@ -18,6 +18,7 @@ import type { SyncOptions } from './sync/index.ts';
 import { flushChangeNotices } from './notify/changes.ts';
 import { runReminders } from './notify/reminders.ts';
 import { backupDb } from './db/backup.ts';
+import { pruneNotices } from './db/notices.ts';
 import { getReport } from './db/reports.ts';
 import { weeklyPeriod } from './reports/data.ts';
 import { generateDaily } from './reports/daily.ts';
@@ -236,6 +237,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
       run: async () => {
         cleanTmp();
         pruneRuns(db, new Date(Date.now() - 90 * DAY).toISOString());
+        pruneNotices(db, new Date(Date.now() - 60 * DAY).toISOString());
       },
     },
   ];

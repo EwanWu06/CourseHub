@@ -10,6 +10,8 @@ import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { saveReport } from '../src/db/reports.ts';
+import { recordNotice } from '../src/db/notices.ts';
+import { setNoticeRecorder, setNotifier } from '../src/notify/mac.ts';
 import { computeDaily } from '../src/reports/data.ts';
 
 let mock: MockCanvas;
@@ -25,6 +27,8 @@ let releaseSync: () => void = () => {};
 before(async () => {
   tmpDataDir();
   db = openDb();
+  setNotifier(async () => {}); // no real banners from tests
+  setNoticeRecorder((n) => recordNotice(db, n));
   mock = await startMockCanvas({ variant: 'alpha' });
   const school = createSchool(db, { name: 'alpha', base_url: mock.baseUrl });
   saveAuth({ schoolId: school.id, savedAt: new Date().toISOString(), userAgent: 'test-agent', cookies: mock.sessionCookies() });
@@ -268,6 +272,20 @@ test('reports: list with headlines, read one, start generation once at a time', 
   assert.equal(o.latestDaily.id, 'daily:2026-10-12');
   assert.equal(typeof o.latestDaily.headline, 'string');
   assert.equal('content' in o.latestDaily, false, 'the Today page gets a brief, not the whole report');
+});
+
+test('notification history: list with unread count, mark read, send a test notice', async () => {
+  recordNotice(db, { kind: 'reminder', title: '3 小时内截止', body: 'BIO 3 · HW 6', url: 'https://alpha/hw' });
+  let r = await json(await call('/api/notices'));
+  assert.ok(r.unread >= 1);
+  assert.equal(r.items[0].title, '3 小时内截止');
+  assert.equal((await json(await call('/api/notices?limit=0'))).items.length, 0);
+  assert.equal((await call('/api/notices/read', { method: 'POST' })).status, 200);
+  assert.equal((await json(await call('/api/notices'))).unread, 0);
+  assert.equal((await call('/api/notices/test', { method: 'POST' })).status, 200);
+  r = await json(await call('/api/notices'));
+  assert.equal(r.items[0].kind, 'system');
+  assert.match(r.items[0].title, /测试/);
 });
 
 test('unknown API paths 404; the app shell is served', async () => {

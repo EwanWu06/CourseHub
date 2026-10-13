@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/main.ts",
-    "test": "TZ=America/Los_Angeles COURSEHUB_QUIET=1 node --disable-warning=ExperimentalWarning --test --test-concurrency=2 \"test/*.test.ts\"",
+    "test": "TZ=America/Los_Angeles COURSEHUB_QUIET=1 COURSEHUB_NO_NOTIFY=1 node --disable-warning=ExperimentalWarning --test --test-concurrency=2 \"test/*.test.ts\"",
     "test:chrome": "TZ=America/Los_Angeles COURSEHUB_QUIET=1 node --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/chrome/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "dev:mock": "node --disable-warning=ExperimentalWarning mock/dev.ts",

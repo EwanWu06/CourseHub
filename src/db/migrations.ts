@@ -248,4 +248,18 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE items ADD COLUMN syllabus_time_known INTEGER NOT NULL DEFAULT 0;
   `,
+  // 5: every notification sent, so a missed banner can be read later in the app
+  `
+  CREATE TABLE notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL DEFAULT 'system',
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    body TEXT NOT NULL,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+  );
+  CREATE INDEX notices_created ON notices(created_at);
+  `,
 ];

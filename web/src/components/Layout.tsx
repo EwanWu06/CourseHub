@@ -12,6 +12,7 @@ const NAV = [
   { to: '/courses', label: '课程', icon: 'courses' },
   { to: '/study', label: '学习', icon: 'study' },
   { to: '/reports', label: '报告', icon: 'reports' },
+  { to: '/notices', label: '通知', icon: 'bell' },
   { to: '/settings', label: '设置', icon: 'settings' },
 ];
 
@@ -22,6 +23,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const sync = useApi<SyncStatus>('/api/sync', { poll: 4000 });
   const schools = useApi<SchoolView[]>('/api/schools', { poll: 30_000 });
   const overview = useApi<Overview>('/api/overview', { poll: 120_000 });
+  const notices = useApi<{ unread: number }>('/api/notices?limit=0', { poll: 30_000 });
   const wasRunning = useRef(false);
 
   useEffect(() => {
@@ -57,6 +59,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Icon name={n.icon} />
                 {n.label}
                 {n.to === '/' && urgent > 0 ? <span className="count">{urgent}</span> : null}
+                {n.to === '/notices' && (notices.data?.unread ?? 0) > 0 ? <span className="count count-soft">{notices.data!.unread}</span> : null}
               </Link>
             );
           })}

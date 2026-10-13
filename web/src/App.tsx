@@ -7,6 +7,7 @@ import { Deadlines } from './pages/Deadlines.tsx';
 import { Courses } from './pages/Courses.tsx';
 import { CourseDetail } from './pages/CourseDetail.tsx';
 import { Inbox } from './pages/Inbox.tsx';
+import { Notices } from './pages/Notices.tsx';
 import { Reports } from './pages/Reports.tsx';
 import { ReportView } from './pages/ReportView.tsx';
 import { StudyCourse, StudyIndex } from './pages/Study.tsx';
@@ -25,6 +26,7 @@ const ROUTES: Route[] = [
   { pattern: '/study', render: () => <StudyIndex /> },
   { pattern: '/study/:courseId', render: (p) => <StudyCourse key={p.courseId} courseId={p.courseId} /> },
   { pattern: '/study/:courseId/:week', render: (p) => <StudyWeek key={`${p.courseId}#${p.week}`} courseId={p.courseId} week={Number(p.week)} /> },
+  { pattern: '/notices', render: () => <Notices /> },
   { pattern: '/reports', render: () => <Reports /> },
   { pattern: '/reports/:id', render: (p) => <ReportView key={p.id} id={p.id} /> },
   { pattern: '/settings', render: () => <Settings /> },

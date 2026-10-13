@@ -7,8 +7,9 @@ import { PORT, ensureDataDirs, paths } from './config.ts';
 import { cleanTmp } from './content/download.ts';
 import { checkDatabase, repairFromBackup } from './db/backup.ts';
 import { openDb } from './db/index.ts';
+import { recordNotice } from './db/notices.ts';
 import type { SchoolRow } from './db/types.ts';
-import { loginNeededNotice, notify } from './notify/mac.ts';
+import { loginNeededNotice, notify, setNoticeRecorder } from './notify/mac.ts';
 import { createScheduler, defaultJobs } from './scheduler.ts';
 import { createApp } from './server/app.ts';
 import { makeSyncStarter } from './server/routes/sync.ts';
@@ -43,6 +44,7 @@ if (checkDatabase(paths().db) === 'corrupt') {
   log('error', `database was damaged; restored from ${repaired.restored ?? '(no backup — starting fresh)'}`);
 }
 const db = openDb();
+setNoticeRecorder((n) => recordNotice(db, n));
 const onLoginNeeded = (school: SchoolRow) => void notify(loginNeededNotice(school));
 const starter = makeSyncStarter(db, syncAll, { onLoginNeeded });
 const app = createApp(db, { starter });
@@ -55,6 +57,7 @@ const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (i
   if (repaired) {
     const from = repaired.restored ? path.basename(repaired.restored).replace(/^coursehub-|\.sqlite$/g, '') : null;
     void notify({
+      kind: 'system',
       title: '数据库已自动修复',
       body: from ? `数据文件损坏，已从 ${from} 的备份恢复；之后勾选的完成和备注可能要重做。` : '数据文件损坏且没有备份，已重新开始；请在设置里重新登录各学校。',
       url: `http://127.0.0.1:${PORT}/`,
