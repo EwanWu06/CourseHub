@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api, refreshAll, useApi } from '../api.ts';
+import { api, getConnection, onConnection, refreshAll, useApi } from '../api.ts';
+import { currentBuild } from '../lib/build.ts';
 import { fmtRelative } from '../format.ts';
 import { Link, useLocation } from '../router.tsx';
 import type { Overview, SchoolView, SyncStatus } from '../types.ts';
@@ -19,6 +20,48 @@ const NAV = [
 
 const STATE_LABEL: Record<SchoolView['status'], string> = { ok: '正常', needs_login: '需登录', new: '未登录', error: '出错' };
 
+/** Watches the server: shows when it can't be reached (and refreshes everything once it's back), and notices a newer web build. */
+function useServerWatch(path: string): { down: boolean; updated: boolean } {
+  const [down, setDown] = useState(getConnection() === 'down');
+  const [updated, setUpdated] = useState(false);
+  const mine = useRef(currentBuild());
+
+  useEffect(() => onConnection((c) => {
+    setDown(c === 'down');
+    if (c === 'up') refreshAll(); // back after a restart: everything on screen refetches
+  }), []);
+
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const h = await api<{ build: string | null }>('/api/health', { timeoutMs: 8000 });
+        if (alive && mine.current && h.build && h.build !== mine.current) setUpdated(true);
+      } catch {
+        // the connection state already says so
+      }
+    };
+    void check();
+    const id = setInterval(() => void check(), down ? 3000 : 60_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [down]);
+
+  // the next navigation after an update loads the new build
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (updated) location.reload();
+  }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { down, updated };
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { path } = useLocation();
   const sync = useApi<SyncStatus>('/api/sync', { poll: 4000 });
@@ -28,6 +71,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const status = useApi<{ issues: unknown[] }>('/api/status', { poll: 120_000 });
   const wasRunning = useRef(false);
   const [searching, setSearching] = useState(false);
+  const { down, updated } = useServerWatch(path);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -106,7 +150,16 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        {down ? <div className="callout warn conn-banner">连不上 Course Hub 后台（可能正在重启或电脑刚醒来），正在自动重连……</div> : null}
+        {updated ? (
+          <div className="callout info conn-banner">
+            Course Hub 已更新，切换页面时会自动换成新版本。
+            <button type="button" className="btn btn-sm right" onClick={() => location.reload()}>现在刷新</button>
+          </div>
+        ) : null}
+        {children}
+      </main>
       <SearchPalette open={searching} onClose={() => setSearching(false)} />
     </div>
   );

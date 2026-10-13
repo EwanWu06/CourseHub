@@ -12,6 +12,22 @@ const TYPES: Record<string, string> = {
 
 const NOT_BUILT = '<!doctype html><meta charset="utf-8"><title>Course Hub</title><p>网页还没有构建：在 ~/CourseHub 运行 <code>npm run build:web</code>。</p>';
 
+let cached: { dist: string; mtime: number; id: string | null } | null = null;
+
+/** Which web build is being served (its hashed entry script), so open pages can tell they are out of date. */
+export function webBuildId(dist: string = DIST): string | null {
+  const index = path.join(dist, 'index.html');
+  try {
+    const mtime = statSync(index).mtimeMs;
+    if (cached && cached.dist === dist && cached.mtime === mtime) return cached.id;
+    const id = readFileSync(index, 'utf8').match(/src="\/assets\/(index-[A-Za-z0-9_-]+)\.js"/)?.[1] ?? null;
+    cached = { dist, mtime, id };
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 /** Serves the built React app; unknown paths fall back to index.html (client-side routing). */
 export function registerStatic(app: Hono): void {
   app.get('*', (c) => {

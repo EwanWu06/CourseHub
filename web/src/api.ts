@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export class ApiError extends Error {
@@ -8,12 +9,44 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const res = await fetch(path, {
-    method: init.method ?? 'GET',
-    headers: { 'X-CourseHub': '1', ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-  });
+export type Connection = 'up' | 'down';
+let connection: Connection = 'up';
+const listeners = new Set<(c: Connection) => void>();
+
+function setConnection(c: Connection): void {
+  if (c === connection) return;
+  connection = c;
+  for (const l of listeners) l(c);
+}
+
+/** Whether the last request reached the Course Hub server (it restarts after updates and on the watchdog). */
+export function getConnection(): Connection {
+  return connection;
+}
+
+export function onConnection(fn: (c: Connection) => void): () => void {
+  listeners.add(fn);
+  return () => void listeners.delete(fn);
+}
+
+export async function api<T>(path: string, init: { method?: string; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
+  const method = init.method ?? 'GET';
+  // every request ends: a hung server shows as an error instead of an endless spinner (AI work runs in the background)
+  const timeoutMs = init.timeoutMs ?? (method === 'GET' ? 30_000 : 120_000);
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: { 'X-CourseHub': '1', ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    setConnection('down');
+    if ((err as Error).name === 'TimeoutError') throw new ApiError(0, `Course Hub 后台没有响应（等了 ${Math.max(1, Math.round(timeoutMs / 1000))} 秒）`);
+    throw new ApiError(0, '连不上 Course Hub 后台（可能正在重启），会自动重试');
+  }
+  setConnection('up');
   const text = await res.text();
   let data: unknown = null;
   try {

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { Layout } from './components/Layout.tsx';
 import { Placeholder } from './pages/Placeholder.tsx';
 import { Settings } from './pages/Settings.tsx';
@@ -46,5 +47,6 @@ export function App() {
       break;
     }
   }
-  return <Layout>{page}</Layout>;
+  // keyed by path: navigating away from a crashed page starts the next one fresh
+  return <Layout><ErrorBoundary key={path}>{page}</ErrorBoundary></Layout>;
 }

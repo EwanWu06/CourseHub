@@ -16,7 +16,7 @@ import { registerReports } from './routes/reports.ts';
 import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
 import { registerSearch } from './routes/search.ts';
-import { registerStatic } from './routes/static.ts';
+import { registerStatic, webBuildId } from './routes/static.ts';
 import { registerStatus } from './routes/status.ts';
 import { registerStudy } from './routes/study.ts';
 import { makeSyncStarter, registerSync } from './routes/sync.ts';
@@ -42,7 +42,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   });
 
   const starter = deps.starter ?? makeSyncStarter(db, deps.runSync, deps.syncOptions);
-  app.get('/api/health', (c) => c.json({ ok: true, ...APP_INFO }));
+  app.get('/api/health', (c) => c.json({ ok: true, ...APP_INFO, build: webBuildId() }));
   registerOverview(app, db);
   registerItems(app, db);
   registerCourses(app, db);

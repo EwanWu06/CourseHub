@@ -15,6 +15,8 @@ import { atLocal, localDateStr } from '../../util/time.ts';
 import { APP_INFO } from '../appinfo.ts';
 import { LOW_DISK_BYTES, diskFreeBytes } from '../../maintenance.ts';
 import { platformViews } from '../../platforms/achieve.ts';
+import { recentClientErrors, recordClientError } from '../clientErrors.ts';
+import { readJson } from './util.ts';
 
 export const JOB_LABELS: Record<string, string> = {
   keepalive: '保持登录', daily: '日报', weekly: '周报', sync: '同步', reminders: '截止提醒', 'report-ai': '补全 AI 安排',
@@ -120,6 +122,7 @@ export function buildStatus(db: DB, now: Date = new Date()) {
     disk: { freeBytes: disk },
     notifier: { applet, unread: unreadNotices(db) },
     platforms,
+    clientErrors: recentClientErrors().slice(0, 5).map(({ at, message, path }) => ({ at, message, path })),
     issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk, platforms, crossChecks }),
   };
 }
@@ -127,4 +130,8 @@ export function buildStatus(db: DB, now: Date = new Date()) {
 export function registerStatus(app: Hono, db: DB): void {
   app.get('/api/status', (c) => c.json(buildStatus(db)));
   app.post('/api/backup', (c) => c.json({ created: !!backupDb(db, new Date()) }));
+  app.post('/api/client-error', async (c) => {
+    recordClientError(await readJson<{ message?: unknown; path?: unknown; stack?: unknown }>(c).catch(() => ({})));
+    return c.body(null, 204);
+  });
 }
