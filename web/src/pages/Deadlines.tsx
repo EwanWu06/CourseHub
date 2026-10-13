@@ -39,7 +39,7 @@ export function Deadlines() {
   const [view, setView] = useState<'list' | 'month'>(query.get('view') === 'month' ? 'month' : 'list');
   const [school, setSchool] = useState('');
   const [course, setCourse] = useState('');
-  const [kind, setKind] = useState('all');
+  const [kind, setKind] = useState(() => (KINDS.some((k) => k.id === query.get('kind')) ? query.get('kind')! : 'all')); // /deadlines?kind=exam
   const [showDone, setShowDone] = useState(false);
   const [adding, setAdding] = useState(false);
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });

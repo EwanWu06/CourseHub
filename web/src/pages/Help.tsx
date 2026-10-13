@@ -23,7 +23,7 @@ export function Help() {
       <section className="section">
         <div className="section-head"><h2>每天怎么用</h2></div>
         <ol className="steps">
-          <li><b>早上看「<Link to="/">今天</Link>」或 7:00 的日报</b>：今天要交什么、接下来 3 天、近期考试，AI 帮你排好上午/下午/晚上。</li>
+          <li><b>早上看「<Link to="/">今天</Link>」或 7:00 的日报</b>：最上面是 30 天内的考试倒计时；下面是 7 天内要交的作业，按天排（同一批讲课视频合成一行，点开看每一个）；右边是 AI 帮你排好的上午/下午/晚上。</li>
           <li><b>做完一项就点左边的圆圈</b>：只在本机记「已完成」，不会改 Canvas。Canvas 上交了的会自动显示已完成。</li>
           <li><b>学新内容去「<Link to="/study">学习</Link>」</b>：每门课每周一份中文讲解，有核心概念、例子、易错点和自测题，出处标到课件第几页。</li>
           <li><b>周日晚上看周报</b>：下周每天要交什么、哪天最忙、有什么考试。</li>

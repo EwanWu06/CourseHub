@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, CSSProperties } from 'react';
 
 export function Masthead({ kicker, title, aside }: { kicker: ReactNode; title: ReactNode; aside?: ReactNode }) {
   return (
@@ -55,7 +55,7 @@ export function ErrorNote({ error }: { error: string | null }) {
   return error ? <div className="callout bad" role="alert">{error}</div> : null;
 }
 
-export function ExtLink({ href, children, className }: { href: string | null; children: ReactNode; className?: string }) {
-  if (!href) return <span className={className}>{children}</span>;
-  return <a className={`ext ${className ?? ''}`} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+export function ExtLink({ href, children, className, style, title }: { href: string | null; children: ReactNode; className?: string; style?: CSSProperties; title?: string }) {
+  if (!href) return <span className={className} style={style} title={title}>{children}</span>;
+  return <a className={`ext ${className ?? ''}`} href={href} target="_blank" rel="noopener noreferrer" style={style} title={title}>{children}</a>;
 }

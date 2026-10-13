@@ -54,8 +54,12 @@ export interface Overview {
   schools: { id: string; name: string; color: string; status: SchoolView['status']; statusDetail: string | null; lastSyncAt: string | null; userName: string | null }[];
   counts: { overdue: number; today: number; next3: number; missing: number };
   today: TaskView[]; next3: TaskView[]; overdue: TaskView[]; exams: TaskView[];
+  /** next 7 days of work to hand in (no exams, no calendar events) plus anything overdue */
+  homework: TaskView[];
+  week: { open: number; minutes: number };
+  study: { courseId: string; courseName: string; color: string; week: number; title: string | null; topics: string[]; guide: string | null }[];
   announcements: Announcement[];
-  latestDaily: { id: string; type: 'daily'; period: string; createdAt: string; headline: string } | null;
+  latestDaily: { id: string; type: 'daily'; period: string; createdAt: string; headline: string; blocks: { slot: string; title: string; minutes: number }[] } | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];
 }
 

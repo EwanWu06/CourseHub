@@ -130,10 +130,10 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
   );
 }
 
-export function TaskList({ tasks, now, showDate = true, empty }: { tasks: TaskView[]; now?: Date; showDate?: boolean; empty?: string }) {
+export function TaskList({ tasks, now, showDate = true, empty, dense = false }: { tasks: TaskView[]; now?: Date; showDate?: boolean; empty?: string; dense?: boolean }) {
   if (tasks.length === 0) return empty ? <p className="muted small" style={{ margin: '4px 0 0' }}>{empty}</p> : null;
   return (
-    <div className="card tasks stagger">
+    <div className={`card tasks stagger ${dense ? 'dense' : ''}`}>
       {tasks.map((t, i) => <TaskRow key={t.id} task={t} now={now} showDate={showDate} index={i} />)}
     </div>
   );

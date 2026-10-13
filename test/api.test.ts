@@ -331,6 +331,30 @@ test('study questions: ask, see it in the week, refuse an empty one', async () =
   assert.equal((await call('/api/study/alpha:101/6/ask', { method: 'POST', body: { question: '' } })).status, 400);
 });
 
+test('the Today overview pulls exams apart from the work to hand in', async () => {
+  const now = Date.now();
+  const o = await json(await call('/api/overview'));
+  assert.ok(o.exams.some((e: { title: string }) => e.title === 'Midterm Exam'));
+  assert.ok(o.homework.length > 0);
+  assert.ok(o.homework.some((t: { title: string }) => t.title === 'Homework 6: Cell Respiration'));
+  for (const t of o.homework as { category: string | null; kind: string; dueAt: string }[]) {
+    assert.notEqual(t.category, 'exam', 'exams live in their own list');
+    assert.notEqual(t.kind, 'event');
+    assert.ok(Date.parse(t.dueAt) < now + 8 * 86_400_000, 'a week ahead at most');
+  }
+  assert.equal(typeof o.week.open, 'number');
+  assert.equal(typeof o.week.minutes, 'number');
+  assert.ok(o.study.some((s: { courseName: string; week: number }) => s.courseName === 'BIO 3' && s.week === 6));
+});
+
+test('the Today overview carries today\'s AI plan', async () => {
+  const today = new Date().toLocaleDateString('en-CA');
+  saveReport(db, { type: 'daily', period: today, content: JSON.stringify({ kind: 'daily', data: computeDaily(db, new Date()), ai: { headline: '先交 HW 6', blocks: [{ slot: '晚上', title: '写 HW 6', minutes: 45 }], tips: [] }, aiError: null }) });
+  const o = await json(await call('/api/overview'));
+  assert.equal(o.latestDaily.period, today);
+  assert.deepEqual(o.latestDaily.blocks, [{ slot: '晚上', title: '写 HW 6', minutes: 45 }]);
+});
+
 test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

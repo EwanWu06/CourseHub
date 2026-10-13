@@ -2,13 +2,16 @@ import type { Hono } from 'hono';
 import type { DB } from '../../db/index.ts';
 import { listItems } from '../../db/items.ts';
 import { latestReport } from '../../db/reports.ts';
+import { listCourses } from '../../db/courses.ts';
+import { getGuide, listWeeks } from '../../db/study.ts';
+import { currentWeek } from '../../weeks/build.ts';
 import { listSchools } from '../../db/schools.ts';
 import { all } from '../../db/sql.ts';
-import { makeTaskViewer } from '../../reports/data.ts';
+import { isExamLike, makeTaskViewer } from '../../reports/data.ts';
 import { headlineOf } from '../../reports/view.ts';
 import type { AnyReport } from '../../reports/view.ts';
 import type { TaskView } from '../../reports/data.ts';
-import { addDays, atLocal, localDateStr } from '../../util/time.ts';
+import { addDays, atLocal, localDateStr, mondayOf } from '../../util/time.ts';
 import { courseDisplayName } from '../../util/course.ts';
 
 const DAY = 86_400_000;
@@ -33,7 +36,14 @@ function dailyBrief(db: DB) {
   } catch {
     headline = '';
   }
-  return { id: row.id, type: row.type, period: row.period, createdAt: row.created_at, headline };
+  let blocks: { slot: string; title: string; minutes: number }[] = [];
+  try {
+    const r = JSON.parse(row.content) as { ai?: { blocks?: { slot: string; title: string; minutes: number }[] } | null };
+    blocks = (r.ai?.blocks ?? []).slice(0, 5).map((b) => ({ slot: b.slot, title: b.title, minutes: b.minutes }));
+  } catch {
+    blocks = [];
+  }
+  return { id: row.id, type: row.type, period: row.period, createdAt: row.created_at, headline, blocks };
 }
 
 export function registerOverview(app: Hono, db: DB): void {
@@ -52,6 +62,27 @@ export function registerOverview(app: Hono, db: DB): void {
     const exams = listItems(db, { from: now.toISOString(), to: new Date(now.getTime() + 30 * DAY).toISOString() })
       .filter((i) => i.category === 'exam').map(view).filter((t) => t.status !== 'done');
     const schools = listSchools(db);
+
+    // the work to hand in over the next 7 days (exams have their own list), plus anything overdue
+    const t8 = atLocal(addDays(today, 8), 0, 0).getTime();
+    const tWeek = atLocal(addDays(mondayOf(today), 7), 0, 0).getTime();
+    const homework = listItems(db, { from: new Date(now.getTime() - 30 * DAY).toISOString(), to: new Date(t8).toISOString() })
+      .map(view)
+      .filter((t) => t.kind !== 'event' && !isExamLike(t.title, t.category))
+      .filter((t) => due(t) >= t0 || t.status === 'overdue' || t.status === 'missing');
+    const weekOpen = homework.filter((t) => actionable(t) && due(t) < tWeek);
+
+    const schoolColor = new Map(schools.map((s) => [s.id, s.color]));
+    const study = listCourses(db).flatMap((course) => {
+      const week = currentWeek(db, course.id, now);
+      const row = week ? listWeeks(db, course.id).find((w) => w.week === week) : undefined;
+      if (!week || !row) return [];
+      return [{
+        courseId: course.id, courseName: courseDisplayName(course), color: course.color ?? schoolColor.get(course.school_id) ?? '#888',
+        week, title: row.title, topics: (JSON.parse(row.topics) as string[]).slice(0, 3), guide: getGuide(db, course.id, week)?.status ?? null,
+      }];
+    });
+
     return c.json({
       now: now.toISOString(),
       schools: schools.map((s) => ({ id: s.id, name: s.name, color: s.color, status: s.status, statusDetail: s.status_detail, lastSyncAt: s.last_sync_at, userName: s.user_name })),
@@ -65,6 +96,9 @@ export function registerOverview(app: Hono, db: DB): void {
       next3,
       overdue,
       exams,
+      homework,
+      week: { open: weekOpen.length, minutes: weekOpen.reduce((n, t) => n + t.estMinutes, 0) },
+      study,
       announcements: latestAnnouncements(db, 10),
       latestDaily: dailyBrief(db),
       loginNeeded: schools.filter((s) => s.status === 'needs_login').map((s) => ({ id: s.id, name: s.name, statusDetail: s.status_detail })),
