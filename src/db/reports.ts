@@ -23,3 +23,8 @@ export function listReports(db: DB, type?: ReportRow['type'], limit = 60): Repor
 export function latestReport(db: DB, type: ReportRow['type']): ReportRow | undefined {
   return one<ReportRow>(db, 'SELECT * FROM reports WHERE type = $type ORDER BY period DESC, created_at DESC LIMIT 1', { type });
 }
+
+/** Replaces a report's content but keeps its time (the next daily report counts "new since" from it). */
+export function updateReportContent(db: DB, id: string, content: string): void {
+  run(db, 'UPDATE reports SET content = $content WHERE id = $id', { id, content });
+}

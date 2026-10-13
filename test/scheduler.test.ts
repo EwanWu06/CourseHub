@@ -175,3 +175,14 @@ test('the backup job snapshots the database at 03:30, catching up after sleep', 
   await job.run(at('2026-10-12T16:30:00Z'));
   assert.deepEqual(listBackups().map((b) => b.date), ['2026-10-12']);
 });
+
+test('a report-ai job tries every 15 minutes to fill in a missing AI part', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const calls: string[] = [];
+  const job = defaultJobs(db, { runSync: async () => {}, onLoginNeeded: () => {}, fillMissingAi: async () => { calls.push('fill'); } }).find((j) => j.name === 'report-ai')!;
+  assert.equal(job.isDue(at('2026-10-12T17:00:00Z'), at('2026-10-12T16:50:00Z'), DEFAULT_SETTINGS), false);
+  assert.equal(job.isDue(at('2026-10-12T17:00:00Z'), at('2026-10-12T16:44:00Z'), DEFAULT_SETTINGS), true);
+  await job.run(at('2026-10-12T17:00:00Z'));
+  assert.deepEqual(calls, ['fill']);
+});

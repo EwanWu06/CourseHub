@@ -11,9 +11,11 @@ import { localDateStr, weekdayZh } from '../util/time.ts';
 import { computeWeekly, isExamLike } from './data.ts';
 import type { TaskView, WeeklyData } from './data.ts';
 import { hoursLabel, taskLabel, typeLabel } from './prompt.ts';
+import { nextAiRetry } from './daily.ts';
+import type { AiPlan, AiRetry } from './daily.ts';
 
 export interface WeeklyAi { headline: string; focus: string[]; risks: string[]; suggestions: string[] }
-export interface WeeklyReport { kind: 'weekly'; data: WeeklyData; ai: WeeklyAi | null; aiError: string | null }
+export interface WeeklyReport { kind: 'weekly'; data: WeeklyData; ai: WeeklyAi | null; aiError: string | null; aiRetry?: AiRetry }
 
 const WEEKLY_SYSTEM = `你是一名大学生的学习规划助手，帮他看清这一周的安排。
 规则：
@@ -82,23 +84,21 @@ export function weeklyNotice(r: WeeklyReport, id: string, now: Date): Notice {
   };
 }
 
+export async function planWeekly(db: DB, data: WeeklyData, now: Date): Promise<AiPlan<WeeklyAi>> {
+  if (!getSettings(db).aiEnabled) return { ai: null, aiError: 'AI 已在设置里关闭', retry: false, rateLimited: false };
+  const res = await aiQueue.run(`report:weekly:${data.weekStart}`, () => runClaude<WeeklyAi>(db, {
+    purpose: 'weekly', ref: data.weekStart, system: WEEKLY_SYSTEM, prompt: weeklyPrompt(data, now), schema: WEEKLY_SCHEMA, timeoutMs: 4 * 60_000,
+  }), { front: true });
+  if (!res.ok || !res.data) return { ai: null, aiError: res.error ?? 'AI 生成失败', retry: true, rateLimited: res.rateLimited };
+  const ai = cleanAi(res.data);
+  return ai ? { ai, aiError: null, retry: false, rateLimited: false } : { ai: null, aiError: 'AI 返回的格式不对', retry: true, rateLimited: false };
+}
+
 export async function generateWeekly(db: DB, opts: { now?: Date; ai?: boolean; notify?: boolean } = {}): Promise<ReportRow> {
   const now = opts.now ?? new Date();
   const data = computeWeekly(db, now);
-  let ai: WeeklyAi | null = null;
-  let aiError: string | null = null;
-  if (opts.ai === false) aiError = '这次没有使用 AI';
-  else if (!getSettings(db).aiEnabled) aiError = 'AI 已在设置里关闭';
-  else {
-    const res = await aiQueue.run(`report:weekly:${data.weekStart}`, () => runClaude<WeeklyAi>(db, {
-      purpose: 'weekly', ref: data.weekStart, system: WEEKLY_SYSTEM, prompt: weeklyPrompt(data, now), schema: WEEKLY_SCHEMA, timeoutMs: 4 * 60_000,
-    }), { front: true });
-    if (res.ok && res.data) {
-      ai = cleanAi(res.data);
-      if (!ai) aiError = 'AI 返回的格式不对';
-    } else aiError = res.error ?? 'AI 生成失败';
-  }
-  const report: WeeklyReport = { kind: 'weekly', data, ai, aiError };
+  const plan: AiPlan<WeeklyAi> = opts.ai === false ? { ai: null, aiError: '这次没有使用 AI', retry: false, rateLimited: false } : await planWeekly(db, data, now);
+  const report: WeeklyReport = { kind: 'weekly', data, ai: plan.ai, aiError: plan.aiError, ...(plan.retry ? { aiRetry: nextAiRetry(1, now, plan.rateLimited) } : {}) };
   const row = saveReport(db, { type: 'weekly', period: data.weekStart, content: JSON.stringify(report) });
   if (opts.notify) await notify(weeklyNotice(report, row.id, now));
   return row;

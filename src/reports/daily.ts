@@ -14,7 +14,15 @@ import { compactTask, hoursLabel, taskLabel } from './prompt.ts';
 
 export type Slot = '上午' | '下午' | '晚上';
 export interface DailyAi { headline: string; blocks: { slot: Slot; title: string; item_id?: string; minutes: number; note?: string }[]; tips: string[] }
-export interface DailyReport { kind: 'daily'; data: DailyData; ai: DailyAi | null; aiError: string | null }
+export interface AiRetry { attempts: number; nextAt: string }
+export interface DailyReport { kind: 'daily'; data: DailyData; ai: DailyAi | null; aiError: string | null; aiRetry?: AiRetry }
+export interface AiPlan<T> { ai: T | null; aiError: string | null; retry: boolean; rateLimited: boolean }
+
+/** Later attempts wait 30 min, 1 h, 2 h … (at least an hour when the usage limit was hit). */
+export function nextAiRetry(attempts: number, now: Date, rateLimited: boolean): AiRetry {
+  const minutes = Math.max(30 * 2 ** (attempts - 1), rateLimited ? 60 : 0);
+  return { attempts, nextAt: new Date(now.getTime() + minutes * 60_000).toISOString() };
+}
 
 const SLOTS: Slot[] = ['上午', '下午', '晚上'];
 
@@ -94,23 +102,22 @@ export function dailyNotice(r: DailyReport, id: string, now: Date): Notice {
   return { kind: 'daily', title: dailyTitle(d), subtitle: r.ai?.headline, body: parts.join(' · '), url: `http://127.0.0.1:${PORT}/reports/${id}` };
 }
 
+/** The AI time plan for a day's data (also used to fill it in later when it failed). */
+export async function planDaily(db: DB, data: DailyData, now: Date): Promise<AiPlan<DailyAi>> {
+  if (!getSettings(db).aiEnabled) return { ai: null, aiError: 'AI 已在设置里关闭', retry: false, rateLimited: false };
+  const res = await aiQueue.run(`report:daily:${data.date}`, () => runClaude<DailyAi>(db, {
+    purpose: 'daily', ref: data.date, system: DAILY_SYSTEM, prompt: dailyPrompt(data, now), schema: DAILY_SCHEMA, timeoutMs: 4 * 60_000,
+  }), { front: true });
+  if (!res.ok || !res.data) return { ai: null, aiError: res.error ?? 'AI 生成失败', retry: true, rateLimited: res.rateLimited };
+  const ai = cleanAi(res.data, data);
+  return ai ? { ai, aiError: null, retry: false, rateLimited: false } : { ai: null, aiError: 'AI 返回的格式不对', retry: true, rateLimited: false };
+}
+
 export async function generateDaily(db: DB, opts: { now?: Date; ai?: boolean; notify?: boolean } = {}): Promise<ReportRow> {
   const now = opts.now ?? new Date();
   const data = computeDaily(db, now);
-  let ai: DailyAi | null = null;
-  let aiError: string | null = null;
-  if (opts.ai === false) aiError = '这次没有使用 AI';
-  else if (!getSettings(db).aiEnabled) aiError = 'AI 已在设置里关闭';
-  else {
-    const res = await aiQueue.run(`report:daily:${data.date}`, () => runClaude<DailyAi>(db, {
-      purpose: 'daily', ref: data.date, system: DAILY_SYSTEM, prompt: dailyPrompt(data, now), schema: DAILY_SCHEMA, timeoutMs: 4 * 60_000,
-    }), { front: true });
-    if (res.ok && res.data) {
-      ai = cleanAi(res.data, data);
-      if (!ai) aiError = 'AI 返回的格式不对';
-    } else aiError = res.error ?? 'AI 生成失败';
-  }
-  const report: DailyReport = { kind: 'daily', data, ai, aiError };
+  const plan: AiPlan<DailyAi> = opts.ai === false ? { ai: null, aiError: '这次没有使用 AI', retry: false, rateLimited: false } : await planDaily(db, data, now);
+  const report: DailyReport = { kind: 'daily', data, ai: plan.ai, aiError: plan.aiError, ...(plan.retry ? { aiRetry: nextAiRetry(1, now, plan.rateLimited) } : {}) };
   const row = saveReport(db, { type: 'daily', period: data.date, content: JSON.stringify(report) });
   if (opts.notify) await notify(dailyNotice(report, row.id, now));
   return row;

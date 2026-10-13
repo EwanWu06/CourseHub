@@ -18,6 +18,8 @@ import type { DailyReport } from '../src/reports/daily.ts';
 import { generateWeekly } from '../src/reports/weekly.ts';
 import type { WeeklyReport } from '../src/reports/weekly.ts';
 import { headlineOf, refreshReport } from '../src/reports/view.ts';
+import { getReport } from '../src/db/reports.ts';
+import { fillMissingAi } from '../src/reports/retry.ts';
 
 let db: DB;
 let rec: string;
@@ -140,4 +142,37 @@ test('a stored report shows today\'s status for its tasks', async () => {
   const live = refreshReport(db, JSON.parse(row.content), NOW) as DailyReport;
   assert.equal(live.data.dueToday[0].status, 'done');
   assert.equal(live.data.dueToday[0].localDone, true);
+});
+
+test('a report whose AI part failed is filled in later, quietly; retries back off', async () => {
+  process.env.FAKE_CLAUDE_MODE = 'error';
+  await generateDaily(db, { now: NOW, notify: true });
+  assert.equal(notices.length, 1, 'the morning banner still goes out without the AI part');
+  const read = () => JSON.parse(getReport(db, 'daily:2026-11-01')!.content) as DailyReport & { aiRetry?: { attempts: number; nextAt: string } };
+  assert.equal(read().aiRetry!.attempts, 1);
+  const later = (min: number) => new Date(NOW.getTime() + min * 60_000);
+  assert.equal(await fillMissingAi(db, later(10)), 0, 'waits about half an hour first');
+  assert.equal(await fillMissingAi(db, later(31)), 0, 'still failing');
+  assert.equal(read().aiRetry!.attempts, 2);
+  process.env.FAKE_CLAUDE_MODE = 'ok';
+  reply(1, { headline: '补上了：今晚先交 HW 5', blocks: [{ slot: '晚上', title: '写 HW 5', item_id: 'tonight', minutes: 45 }], tips: [] });
+  assert.equal(await fillMissingAi(db, later(60)), 0, 'backs off to an hour');
+  const createdAt = getReport(db, 'daily:2026-11-01')!.created_at;
+  assert.equal(await fillMissingAi(db, later(95)), 1);
+  assert.equal(getReport(db, 'daily:2026-11-01')!.created_at, createdAt, 'filling in keeps the report time ("since" for tomorrow)');
+  const r = read();
+  assert.equal(r.ai!.headline, '补上了：今晚先交 HW 5');
+  assert.equal(r.ai!.blocks[0].item_id, 'tonight');
+  assert.equal(r.aiError, null);
+  assert.equal(r.aiRetry, undefined);
+  assert.equal(notices.length, 1, 'no second banner');
+  assert.equal(await fillMissingAi(db, later(300)), 0, 'nothing left to fill');
+});
+
+test('reports made with AI switched off are not retried', async () => {
+  updateSettings(db, { aiEnabled: false });
+  await generateDaily(db, { now: NOW, notify: false });
+  updateSettings(db, { aiEnabled: true });
+  assert.equal(await fillMissingAi(db, new Date(NOW.getTime() + 120 * 60_000)), 0);
+  assert.equal(calls(), 0);
 });

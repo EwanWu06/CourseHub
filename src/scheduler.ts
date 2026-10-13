@@ -22,6 +22,7 @@ import { pruneNotices } from './db/notices.ts';
 import { getReport } from './db/reports.ts';
 import { weeklyPeriod } from './reports/data.ts';
 import { generateDaily } from './reports/daily.ts';
+import { fillMissingAi } from './reports/retry.ts';
 import { generateWeekly } from './reports/weekly.ts';
 import { log } from './util/log.ts';
 import { waitForNetwork } from './util/network.ts';
@@ -134,6 +135,7 @@ export interface JobDeps {
   generateWeekly?: (now: Date) => Promise<unknown>;
   runReminders?: (now: Date) => Promise<unknown>;
   flushChanges?: (now: Date) => Promise<unknown>;
+  fillMissingAi?: (now: Date) => Promise<unknown>;
 }
 
 export function defaultJobs(db: DB, deps: JobDeps): Job[] {
@@ -141,6 +143,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
   const weekly = deps.generateWeekly ?? ((now: Date) => generateWeekly(db, { now, notify: true }));
   const reminders = deps.runReminders ?? ((now: Date) => runReminders(db, now));
   const changes = deps.flushChanges ?? ((now: Date) => flushChangeNotices(db, now));
+  const fillAi = deps.fillMissingAi ?? ((now: Date) => fillMissingAi(db, now));
   const networkReady = async () => {
     const hosts = listSchools(db).flatMap((s) => {
       try {
@@ -200,6 +203,14 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
       run: async (now) => {
         await reminders(now);
         await changes(now);
+      },
+    },
+    {
+      name: 'report-ai', // a report whose AI part failed (usage limit, network) gets it filled in later, quietly
+      timeoutMs: 20 * 60_000,
+      isDue: (now, last) => isIntervalDue(now, last, 0.25, { start: 0, end: 24 }),
+      run: async (now) => {
+        await fillAi(now);
       },
     },
     {
