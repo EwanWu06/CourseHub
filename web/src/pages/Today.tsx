@@ -101,7 +101,7 @@ export function Today() {
                   {data.exams.map((e) => (
                     <li key={e.id} style={{ ['--c' as string]: e.color }}>
                       <span className="notice-title">{e.title}</span>
-                      <div className="small"><span className="course-chip"><i />{e.courseName}</span> · <span className="mono">{fmtDue(e.dueAt, now)}</span></div>
+                      <div className="small"><span className="course-chip"><i />{e.courseName}</span> · <span className="mono">{fmtDue(e.dueAt, now, { dateOnly: e.dueDateOnly })}</span></div>
                     </li>
                   ))}
                 </ul>

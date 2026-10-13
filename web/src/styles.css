@@ -588,6 +588,14 @@
   .qa-mark.is-a { background: color-mix(in oklab, var(--moss) 12%, transparent); border-color: var(--moss); color: var(--moss); }
 }
 
+@layer components {
+  @media (max-width: 820px) {
+    /* the sidebar is a top bar here: search shrinks to its icon */
+    .side-search { width: auto; margin: 0; padding: 7px 9px; flex: none; }
+    .side-search .grow, .side-search kbd { display: none; }
+  }
+}
+
 @layer utilities {
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nowrap { white-space: nowrap; }

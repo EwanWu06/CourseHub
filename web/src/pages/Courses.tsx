@@ -51,7 +51,7 @@ export function Courses() {
                         <div className="next-due">
                           <div className="small muted">下一项</div>
                           <div className="next-title">{due.title}</div>
-                          <div className="small"><span className="mono">{fmtDue(due.dueAt, now)}</span>{fmtCountdown(due.dueAt, now) ? <span className="hot"> · {fmtCountdown(due.dueAt, now)}</span> : null}</div>
+                          <div className="small"><span className="mono">{fmtDue(due.dueAt, now, { dateOnly: due.dueDateOnly })}</span>{!due.dueDateOnly && fmtCountdown(due.dueAt, now) ? <span className="hot"> · {fmtCountdown(due.dueAt, now)}</span> : null}</div>
                         </div>
                       ) : <div className="small muted">近期没有要交的</div>}
                       <div className="row small muted" style={{ marginTop: 12 }}>

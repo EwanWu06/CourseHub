@@ -45,7 +45,7 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
   const done = doneElsewhere || localDone;
   const isEvent = task.kind === 'event';
   const seal = done ? null : sealFor(task, now);
-  const countdown = done || isEvent ? null : fmtCountdown(task.dueAt, now);
+  const countdown = done || isEvent || task.dueDateOnly ? null : fmtCountdown(task.dueAt, now); // no fake 23:59 countdowns
   const note = providerNote(task.provider);
   const [userNote, setUserNote] = useState(task.note);
   const [editing, setEditing] = useState(false);
