@@ -18,3 +18,20 @@ export function tmpDataDir(): string {
 export function fixedNow(iso: string): Date {
   return new Date(iso);
 }
+
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+/** Starts a throwaway HTTP server on a random port. host 'localhost' gives a second hostname for cross-host tests. */
+export async function startHttp(handler: http.RequestListener, host = '127.0.0.1'): Promise<{ url: string; close(): Promise<void> }> {
+  const server = http.createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, host, resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://${host}:${port}`,
+    close: () => new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    }),
+  };
+}
