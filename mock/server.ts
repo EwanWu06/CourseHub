@@ -416,7 +416,9 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     }
     const download = url.pathname.match(/^\/files\/(\d+)\/download$/);
     if (download) {
-      if (authOf(req) !== 'session') return redirect(res, '/login');
+      // Like Canvas: the verifier in the API's file url grants access on its own (token clients rely on it).
+      const verified = url.searchParams.get('verifier') === `v${download[1]}`;
+      if (!verified && authOf(req) !== 'session') return redirect(res, '/login');
       return redirect(res, `${blobUrl}/blob/${download[1]}?sig=ok`);
     }
     if (/^\/courses\/\d+\/files\/\d+\/preview$/.test(url.pathname)) {

@@ -9,6 +9,7 @@ import { finishSyncRun, startSyncRun } from '../db/runs.ts';
 import { one } from '../db/sql.ts';
 import type { SchoolRow } from '../db/types.ts';
 import { makeClient, persistClientCookies } from '../auth/store.ts';
+import { silentRelogin } from '../auth/login.ts';
 import { log } from '../util/log.ts';
 import { errorText, newStats } from './context.ts';
 import type { SyncContext, SyncStats } from './context.ts';
@@ -116,13 +117,17 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
       } catch (err) {
         if (!(err instanceof SessionExpiredError)) throw err;
         persistClientCookies(schoolId, client);
-        const relogin = opts.relogin ?? null;
+        const isToken = school.auth_mode === 'token';
+        const relogin = isToken ? null : opts.relogin === undefined ? (id: string) => silentRelogin(db, id) : opts.relogin;
         if (relogin && (await relogin(schoolId))) {
           client = makeClient(getSchool(db, schoolId)!);
           if (!client) throw new Error('重新登录后没有保存登录状态');
           await apiSync(db, getSchool(db, schoolId)!, client, now, stats);
         } else {
-          updateSchool(db, schoolId, { status: 'needs_login', status_detail: '登录已过期，请重新登录' });
+          updateSchool(db, schoolId, {
+            status: 'needs_login',
+            status_detail: isToken ? '访问令牌无效或已过期，请在设置里更新' : '登录已过期，请重新登录',
+          });
           opts.onLoginNeeded?.(getSchool(db, schoolId)!);
           await icsOnly(db, getSchool(db, schoolId)!, now, stats);
         }
