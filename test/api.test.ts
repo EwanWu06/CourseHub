@@ -301,6 +301,20 @@ test('status: schools, jobs, AI usage, backups and issues; a backup on demand', 
   assert.equal((await json(await call('/api/backup', { method: 'POST' }))).created, false, 'one a day');
 });
 
+test('search finds tasks, courses, files, pages and announcements; wildcards are literal', async () => {
+  const group = (r: { groups: { kind: string; items: { title?: string; name?: string }[] }[] }, kind: string) => r.groups.find((g) => g.kind === kind)?.items ?? [];
+  const resp = await json(await call('/api/search?q=respiration'));
+  assert.ok(group(resp, 'tasks').some((t) => t.title === 'Homework 6: Cell Respiration'));
+  assert.ok(group(resp, 'files').some((f) => f.name === 'Week6_Cell_Respiration.pdf'));
+  const mid = await json(await call('/api/search?q=MIDTERM'));
+  assert.ok(group(mid, 'topics').some((t) => t.title === 'Midterm review session'));
+  assert.ok(group(mid, 'tasks').some((t) => t.title === 'Midterm Exam'));
+  assert.ok(group(await json(await call('/api/search?q=calculus')), 'courses').some((c) => (c as { displayName?: string }).displayName === 'MATH 7'));
+  assert.ok(group(await json(await call('/api/search?q=overview')), 'pages').some((p) => p.title === 'Week 6 Overview'));
+  assert.deepEqual((await json(await call('/api/search?q=%25'))).groups, []);
+  assert.deepEqual((await json(await call('/api/search?q=%20%20'))).groups, []);
+});
+
 test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

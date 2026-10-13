@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api, refreshAll, useApi } from '../api.ts';
 import { fmtRelative } from '../format.ts';
 import { Link, useLocation } from '../router.tsx';
 import type { Overview, SchoolView, SyncStatus } from '../types.ts';
 import { Icon } from './Icon.tsx';
+import { SearchPalette } from './SearchPalette.tsx';
 
 const NAV = [
   { to: '/', label: '今天', icon: 'today' },
@@ -26,6 +27,22 @@ export function Layout({ children }: { children: ReactNode }) {
   const notices = useApi<{ unread: number }>('/api/notices?limit=0', { poll: 30_000 });
   const status = useApi<{ issues: unknown[] }>('/api/status', { poll: 120_000 });
   const wasRunning = useRef(false);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearching((v) => !v);
+      } else if (e.key === '/' && !typing) {
+        e.preventDefault();
+        setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     const running = !!sync.data?.running;
@@ -52,6 +69,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="brand-mark">Course Hub</span>
           <span className="brand-zh">课程中心</span>
         </Link>
+        <button type="button" className="side-search" onClick={() => setSearching(true)}>
+          <Icon name="search" size={15} /><span className="grow">搜索</span><kbd>⌘K</kbd>
+        </button>
         <nav className="nav" aria-label="主导航">
           {NAV.map((n) => {
             const active = n.to === '/' ? path === '/' : path.startsWith(n.to);
@@ -87,6 +107,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <main className="main">{children}</main>
+      <SearchPalette open={searching} onClose={() => setSearching(false)} />
     </div>
   );
 }

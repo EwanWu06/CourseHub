@@ -15,6 +15,7 @@ import { registerProxy } from './routes/proxy.ts';
 import { registerReports } from './routes/reports.ts';
 import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
+import { registerSearch } from './routes/search.ts';
 import { registerStatic } from './routes/static.ts';
 import { registerStatus } from './routes/status.ts';
 import { registerStudy } from './routes/study.ts';
@@ -52,6 +53,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   registerReports(app, db, { generate: deps.generateReport });
   registerNotices(app, db);
   registerStatus(app, db);
+  registerSearch(app, db);
   app.all('/api/*', (c) => c.json({ error: '不存在' }, 404));
   registerProxy(app, db);
   registerStatic(app);
