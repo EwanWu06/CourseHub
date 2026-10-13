@@ -596,6 +596,16 @@
   }
 }
 
+@layer components {
+  /* a section title never breaks mid-word; its note moves under it when there's no room */
+  .section-head { flex-wrap: wrap; row-gap: 2px; }
+  .section-head h2 { white-space: nowrap; }
+  @media (max-width: 640px) {
+    .status-row { flex-wrap: wrap; }
+    .status-row .grow { flex-basis: 100%; padding-left: 22px; }
+  }
+}
+
 @layer utilities {
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nowrap { white-space: nowrap; }
