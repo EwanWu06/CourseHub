@@ -6,6 +6,7 @@ export interface TaskView {
   id: string; title: string; kind: ItemKind; provider: string; courseId: string | null; courseName: string | null;
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual'; localDone: boolean;
+  category: string | null; categorySource: string | null; syllabusNote: string | null;
 }
 
 export interface LoginState { status: 'idle' | 'waiting' | 'success' | 'failed'; message: string; startedAt: string | null }
@@ -50,7 +51,7 @@ export interface Overview {
   now: string;
   schools: { id: string; name: string; color: string; status: SchoolView['status']; statusDetail: string | null; lastSyncAt: string | null; userName: string | null }[];
   counts: { overdue: number; today: number; next3: number; missing: number };
-  today: TaskView[]; next3: TaskView[]; overdue: TaskView[];
+  today: TaskView[]; next3: TaskView[]; overdue: TaskView[]; exams: TaskView[];
   announcements: Announcement[];
   latestDaily: ReportRow | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];

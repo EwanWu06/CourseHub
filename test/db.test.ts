@@ -35,7 +35,7 @@ function item(courseId: string, schoolId: string, id: string, patch: Partial<Ite
     id, school_id: schoolId, course_id: courseId, kind: 'assignment', title: 'HW 1', due_at: '2026-10-20T06:59:00Z',
     end_at: null, unlock_at: null, lock_at: null, points: 10, html_url: null, provider: 'canvas', description_html: null,
     submission_types: '["online_upload"]', sub_state: 'unsubmitted', submitted_at: null, missing: 0, late: 0, excused: 0,
-    score: null, grade: null, canvas_done: 0, source: 'api', module_id: null, ...patch,
+    score: null, grade: null, canvas_done: 0, source: 'api', module_id: null, group_id: null, ...patch,
   };
 }
 

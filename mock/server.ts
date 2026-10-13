@@ -151,6 +151,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
   const assignmentJson = (c: MockCourse, a: MockAssignment, withSubmission: boolean) => ({
     id: a.id, name: a.name, description: a.description, due_at: a.due_at, unlock_at: a.unlock_at ?? null, lock_at: a.lock_at ?? null,
     points_possible: a.points_possible, submission_types: a.submission_types, course_id: c.id, published: true,
+    assignment_group_id: a.group ?? null,
     html_url: `${baseUrl}/courses/${c.id}/assignments/${a.id}`,
     is_quiz_assignment: !!a.is_quiz_assignment, quiz_id: a.quiz_id,
     ...(a.discussion_topic_id ? { discussion_topic: { id: a.discussion_topic_id } } : {}),
@@ -265,6 +266,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       if (rest === '') return { one: courseJson(c, q) };
       if (rest === '/tabs') return { list: c.tabs.map((id) => ({ id, label: id, html_url: `/courses/${c.id}/${id}`, type: 'internal' })) };
       if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]').includes('submission'))) };
+      if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1 })) };
       if (rest === '/quizzes') return { list: c.quizzes.map((qz) => ({ ...qz, html_url: `${baseUrl}/courses/${c.id}/quizzes/${qz.id}` })) };
       if (rest === '/modules') {
         const withItems = q.getAll('include[]').includes('items');

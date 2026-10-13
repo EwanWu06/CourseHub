@@ -1,7 +1,8 @@
 // Everything with a date: assignments (+ submission state), ungraded quizzes, calendar events,
 // planner-only items (page to-dos, personal notes) and the missing-submissions flag.
 import { CanvasForbiddenError, CanvasNotFoundError } from '../canvas/client.ts';
-import type { CanvasAssignment, CanvasCalendarEvent, CanvasPlannerItem, CanvasQuiz } from '../canvas/types.ts';
+import type { CanvasAssignment, CanvasAssignmentGroup, CanvasCalendarEvent, CanvasPlannerItem, CanvasQuiz } from '../canvas/types.ts';
+import { upsertAssignmentGroup } from '../db/content.ts';
 import { all } from '../db/sql.ts';
 import { getItem, markRemovedExcept, setItemFlags, upsertItem } from '../db/items.ts';
 import type { ItemUpsert } from '../db/items.ts';
@@ -35,7 +36,7 @@ function blankItem(ctx: SyncContext, id: string, course: CourseRow | undefined, 
     id, school_id: ctx.school.id, course_id: course?.id ?? null, kind, title, due_at: null, end_at: null, unlock_at: null,
     lock_at: null, points: null, html_url: null, provider: 'canvas', description_html: null, submission_types: null,
     sub_state: null, submitted_at: null, missing: 0, late: 0, excused: 0, score: null, grade: null,
-    canvas_done: prev?.canvas_done ?? 0, source: 'api', module_id: prev?.module_id ?? null,
+    canvas_done: prev?.canvas_done ?? 0, source: 'api', module_id: prev?.module_id ?? null, group_id: prev?.group_id ?? null,
   };
 }
 
@@ -49,9 +50,21 @@ export function assignmentRow(ctx: SyncContext, course: CourseRow, a: CanvasAssi
     due_at: a.due_at ?? null, unlock_at: a.unlock_at ?? null, lock_at: a.lock_at ?? null, points: a.points_possible ?? null,
     html_url: a.html_url ?? `${course.html_url}/assignments/${a.id}`, provider: detectProvider(a),
     description_html: a.description ?? null, submission_types: JSON.stringify(a.submission_types ?? []),
+    group_id: a.assignment_group_id ? `${ctx.school.id}:g:${a.assignment_group_id}` : null,
     sub_state: s?.workflow_state ?? null, submitted_at: s?.submitted_at ?? null, missing: s?.missing ? 1 : 0,
     late: s?.late ? 1 : 0, excused: s?.excused ? 1 : 0, score: s?.score ?? null, grade: s?.grade ?? null,
   };
+}
+
+export async function syncAssignmentGroups(ctx: SyncContext, course: CourseRow): Promise<void> {
+  try {
+    const groups = await ctx.client.getAll<CanvasAssignmentGroup>(`/api/v1/courses/${course.canvas_id}/assignment_groups`);
+    for (const g of groups) {
+      upsertAssignmentGroup(ctx.db, { id: `${ctx.school.id}:g:${g.id}`, course_id: course.id, name: g.name, weight: g.group_weight ?? null, position: g.position ?? 0 });
+    }
+  } catch (err) {
+    if (!(err instanceof CanvasForbiddenError || err instanceof CanvasNotFoundError)) throw err;
+  }
 }
 
 /** Returns the ids seen; throws if the listing failed (then nothing may be marked removed). */

@@ -12,7 +12,8 @@ function row(p: Partial<ItemRow>): ItemRow {
     id: 'x', school_id: 's', course_id: 'c', kind: 'assignment', title: 'HW', due_at: future, end_at: null, unlock_at: null,
     lock_at: null, points: 10, html_url: null, provider: 'canvas', description_html: null, submission_types: '["online_upload"]',
     sub_state: 'unsubmitted', submitted_at: null, missing: 0, late: 0, excused: 0, score: null, grade: null, canvas_done: 0,
-    local_done: 0, source: 'api', module_id: null, first_seen_at: '', updated_at: '', removed: 0, ...p,
+    local_done: 0, source: 'api', module_id: null, first_seen_at: '', updated_at: '', removed: 0,
+    group_id: null, category: null, category_source: null, syllabus_date: null, syllabus_note: null, ...p,
   };
 }
 
@@ -61,4 +62,18 @@ test('estimateMinutes and isExamLike', () => {
   assert.ok(isExamLike('Quiz 3'));
   assert.ok(isExamLike('期中考试'));
   assert.ok(!isExamLike('Homework 3'));
+});
+
+test('estimateMinutes follows the real category when known', () => {
+  assert.equal(estimateMinutes(row({ category: 'exam', title: 'Knowledge Check 1', points: 100 })), 120);
+  assert.equal(estimateMinutes(row({ category: 'lab', title: 'Exp #24' })), 120);
+  assert.equal(estimateMinutes(row({ category: 'project', title: 'Research Paper' })), 150);
+  assert.equal(estimateMinutes(row({ category: 'reading', title: '15.2 The Rate of a Chemical Reaction', points: 2 })), 25);
+  assert.equal(estimateMinutes(row({ category: 'survey', title: 'Getting to Know You Survey' })), 10);
+  assert.equal(estimateMinutes(row({ category: 'homework', kind: 'quiz', title: 'Chapter 15 Homework', points: 102 })), 150);
+});
+
+test('isExamLike also trusts the category', () => {
+  assert.ok(isExamLike('Knowledge Check 1', 'exam'));
+  assert.ok(!isExamLike('Chapter 15 Homework', 'homework'));
 });

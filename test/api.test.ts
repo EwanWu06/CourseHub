@@ -79,6 +79,7 @@ test('overview groups what needs attention', async () => {
   assert.ok(o.counts.missing >= 1);
   assert.equal(o.schools.length, 1);
   assert.ok(o.announcements.some((a: { title: string }) => a.title === 'Midterm review session'));
+  assert.deepEqual(o.exams.map((e: { title: string }) => e.title), ['Midterm Exam'], 'upcoming exams within 30 days');
   const lab2 = o.overdue.find((t: { title: string }) => t.title === 'Lab Report 2');
   assert.equal(lab2.status, 'missing');
   assert.equal(lab2.courseName, 'BIO 3');
@@ -214,4 +215,16 @@ test('not-yet-built features answer 501; unknown API paths 404; the app shell is
   const page = await call('/today');
   assert.equal(page.status, 200);
   assert.match(page.headers.get('content-type')!, /text\/html/);
+});
+
+test('category can be corrected by hand and is validated', async () => {
+  const res = await call(`/api/items/${encodeURIComponent('alpha:a:5002')}`, { method: 'PATCH', body: { category: 'exam' } });
+  const t = await json(res);
+  assert.equal(t.category, 'exam');
+  assert.equal(t.categorySource, 'user');
+  assert.equal((await call(`/api/items/${encodeURIComponent('alpha:a:5002')}`, { method: 'PATCH', body: { category: 'nonsense' } })).status, 400);
+  await call(`/api/items/${encodeURIComponent('alpha:a:5002')}`, { method: 'PATCH', body: { category: null } });
+  const reset = await json(await call(`/api/items/${encodeURIComponent('alpha:a:5002')}`, { method: 'PATCH', body: {} }));
+  assert.notEqual(reset.categorySource, 'user', 'resetting hands the decision back to the automatic classifier');
+  assert.equal(reset.category, 'homework');
 });

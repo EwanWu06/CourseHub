@@ -5,11 +5,12 @@ import type { ItemKind, ItemRow } from './types.ts';
 import { all, insertRow, one, pick, placeholders, run, updateRow } from './sql.ts';
 import { getCourse } from './courses.ts';
 
-export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed'>;
+/** What a sync writes. Category and syllabus fields are owned by the classifier / syllabus pass / user. */
+export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note'>;
 
 const COLS = ['id', 'school_id', 'course_id', 'kind', 'title', 'due_at', 'end_at', 'unlock_at', 'lock_at', 'points',
   'html_url', 'provider', 'description_html', 'submission_types', 'sub_state', 'submitted_at', 'missing', 'late',
-  'excused', 'score', 'grade', 'canvas_done', 'source', 'module_id'] as const;
+  'excused', 'score', 'grade', 'canvas_done', 'source', 'module_id', 'group_id'] as const;
 
 export function getItem(db: DB, id: string): ItemRow | undefined {
   return one<ItemRow>(db, 'SELECT * FROM items WHERE id = $id', { id });
@@ -105,8 +106,16 @@ export function setItemFlags(db: DB, id: string, patch: { missing?: number; canv
 }
 
 export function itemToUpsert(row: ItemRow): ItemUpsert {
-  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, ...rest } = row;
+  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, category: _c, category_source: _cs, syllabus_date: _sd, syllabus_note: _sn, ...rest } = row;
   return rest;
+}
+
+export function setItemCategory(db: DB, id: string, category: string | null, source: string | null): void {
+  run(db, 'UPDATE items SET category = $category, category_source = $source WHERE id = $id', { id, category, source });
+}
+
+export function setSyllabusDate(db: DB, id: string, date: string | null, note: string | null): void {
+  run(db, 'UPDATE items SET syllabus_date = $date, syllabus_note = $note WHERE id = $id', { id, date, note });
 }
 
 export function setItemModule(db: DB, id: string, moduleId: string | null): void {

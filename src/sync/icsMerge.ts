@@ -32,7 +32,7 @@ export async function mergeIcs(ctx: IcsCtx, events: IcsEvent[]): Promise<number>
       due_at: ev.start, end_at: ev.kind === 'event' ? ev.end : null, unlock_at: null, lock_at: null, points: null, html_url: ev.url,
       provider: 'canvas', description_html: ev.description, submission_types: null,
       sub_state: ev.kind === 'assignment' ? 'unknown' : null, submitted_at: null, missing: 0, late: 0, excused: 0, score: null,
-      grade: null, canvas_done: 0, source: 'ics', module_id: null,
+      grade: null, canvas_done: 0, source: 'ics', module_id: null, group_id: null,
     };
     upsertItem(ctx.db, row);
     noteItemChange(ctx, undefined, row);

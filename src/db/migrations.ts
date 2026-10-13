@@ -229,4 +229,19 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE schools ADD COLUMN alive_at TEXT;
   ALTER TABLE schools ADD COLUMN renewals INTEGER NOT NULL DEFAULT 0;
   `,
+  // 3: assignment groups and real categories (exam vs homework …), dates found in the syllabus
+  `
+  CREATE TABLE assignment_groups (
+    id TEXT PRIMARY KEY,
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    weight REAL,
+    position INTEGER NOT NULL DEFAULT 0
+  );
+  ALTER TABLE items ADD COLUMN group_id TEXT;
+  ALTER TABLE items ADD COLUMN category TEXT;
+  ALTER TABLE items ADD COLUMN category_source TEXT;
+  ALTER TABLE items ADD COLUMN syllabus_date TEXT;
+  ALTER TABLE items ADD COLUMN syllabus_note TEXT;
+  `,
 ];

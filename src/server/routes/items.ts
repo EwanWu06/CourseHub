@@ -1,6 +1,8 @@
 import type { Hono } from 'hono';
 import type { DB } from '../../db/index.ts';
-import { createManual, deleteManual, getItem, listItems, listUndated, setLocalDone } from '../../db/items.ts';
+import { createManual, deleteManual, getItem, listItems, listUndated, setItemCategory, setLocalDone } from '../../db/items.ts';
+import { CATEGORIES, categorizeSchool } from '../../sync/category.ts';
+import type { Category } from '../../sync/category.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
 import { HttpError, isUrl, readJson } from './util.ts';
 
@@ -42,8 +44,19 @@ export function registerItems(app: Hono, db: DB): void {
   app.patch('/api/items/:id', async (c) => {
     const id = c.req.param('id');
     if (!getItem(db, id)) throw new HttpError(404, '任务不存在');
-    const body = await readJson<{ localDone?: boolean }>(c);
+    const body = await readJson<{ localDone?: boolean; category?: string | null }>(c);
     if (typeof body.localDone === 'boolean') setLocalDone(db, id, body.localDone);
+    if ('category' in body) {
+      if (body.category === null) {
+        const item = getItem(db, id)!;
+        setItemCategory(db, id, null, null);
+        if (item.school_id) categorizeSchool(db, item.school_id);
+      } else if (CATEGORIES.includes(body.category as Category)) {
+        setItemCategory(db, id, body.category!, 'user');
+      } else {
+        throw new HttpError(400, '未知的类别');
+      }
+    }
     return c.json(makeTaskViewer(db, new Date())(getItem(db, id)!));
   });
 

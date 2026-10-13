@@ -22,7 +22,10 @@ export interface CanvasAssignment {
   points_possible?: number | null; submission_types?: string[]; html_url?: string; quiz_id?: string | null;
   is_quiz_assignment?: boolean; is_quiz_lti_assignment?: boolean; discussion_topic?: { id: string } | null;
   external_tool_tag_attributes?: { url?: string | null } | null; submission?: CanvasSubmission | null; published?: boolean;
+  assignment_group_id?: string | null;
 }
+
+export interface CanvasAssignmentGroup { id: string; name: string; group_weight?: number | null; position?: number }
 
 export interface CanvasQuiz {
   id: string; title: string; due_at?: string | null; unlock_at?: string | null; lock_at?: string | null; html_url?: string;

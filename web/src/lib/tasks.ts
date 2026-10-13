@@ -6,6 +6,11 @@ export const KIND_LABEL: Record<ItemKind, string> = {
   assignment: '作业', quiz: '测验', discussion: '讨论', page: '阅读', note: '备忘', event: '日程', manual: '手动',
 };
 
+export const CATEGORY_LABEL: Record<string, string> = {
+  exam: '考试', quiz: '测验', homework: '作业', lab: '实验', project: '项目 / 论文', discussion: '讨论',
+  reading: '讲课视频 / 阅读', participation: '出勤 / 参与', survey: '问卷', other: '其他',
+};
+
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   done: '已完成', todo: '待完成', overdue: '已逾期', missing: '缺交', past: '已过', event: '日程',
 };
@@ -44,10 +49,11 @@ export function groupByDay(tasks: TaskView[], now: Date = new Date()): DayGroup[
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-/** A red seal for what needs attention first: 缺 missing, 逾 overdue, 急 due within 24h. */
+/** A red seal for what needs attention first: 缺 missing, 逾 overdue, 考 exam, 急 due within 24h. */
 export function sealFor(t: TaskView, now: Date = new Date()): string | null {
   if (t.status === 'missing') return '缺';
   if (t.status === 'overdue') return '逾';
+  if (t.category === 'exam' && t.status !== 'done' && t.status !== 'past') return '考';
   if (t.status === 'todo' && t.dueAt) {
     const ms = Date.parse(t.dueAt) - now.getTime();
     if (ms >= 0 && ms < 24 * 3_600_000) return '急';

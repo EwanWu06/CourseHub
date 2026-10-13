@@ -10,13 +10,16 @@ import { dateKey, groupByDay } from '../lib/tasks.ts';
 import type { CourseCard, SchoolView, TaskView } from '../types.ts';
 
 const KINDS: { id: string; label: string; match: (t: TaskView) => boolean }[] = [
-  { id: 'all', label: '全部类型', match: () => true },
-  { id: 'assignment', label: '作业', match: (t) => t.kind === 'assignment' },
-  { id: 'quiz', label: '测验', match: (t) => t.kind === 'quiz' },
-  { id: 'discussion', label: '讨论', match: (t) => t.kind === 'discussion' },
-  { id: 'event', label: '日程 / 考试', match: (t) => t.kind === 'event' },
+  { id: 'all', label: '全部类别', match: () => true },
+  { id: 'exam', label: '考试', match: (t) => t.category === 'exam' },
+  { id: 'homework', label: '作业', match: (t) => t.category === 'homework' },
+  { id: 'quiz', label: '测验', match: (t) => t.category === 'quiz' },
+  { id: 'lab', label: '实验', match: (t) => t.category === 'lab' },
+  { id: 'project', label: '项目 / 论文', match: (t) => t.category === 'project' },
+  { id: 'discussion', label: '讨论', match: (t) => t.category === 'discussion' },
+  { id: 'reading', label: '讲课视频 / 阅读', match: (t) => t.category === 'reading' },
+  { id: 'event', label: '日程', match: (t) => t.kind === 'event' && t.category !== 'exam' },
   { id: 'manual', label: '手动添加', match: (t) => t.kind === 'manual' },
-  { id: 'other', label: '阅读 / 备忘', match: (t) => t.kind === 'page' || t.kind === 'note' },
 ];
 
 const DAY = 86_400_000;

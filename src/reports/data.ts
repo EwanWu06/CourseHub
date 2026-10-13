@@ -12,6 +12,7 @@ export interface TaskView {
   id: string; title: string; kind: ItemKind; provider: string; courseId: string | null; courseName: string | null;
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual'; localDone: boolean;
+  category: string | null; categorySource: string | null; syllabusNote: string | null;
 }
 
 const DONE_STATES = new Set(['submitted', 'graded', 'pending_review']);
@@ -39,14 +40,18 @@ export function taskStatus(row: ItemRow, now: Date): TaskStatus {
   return 'overdue';
 }
 
-export function isExamLike(title: string): boolean {
+export function isExamLike(title: string, category?: string | null): boolean {
+  if (category) return category === 'exam';
   return /\b(exam|midterm|final|quiz)s?\b|考试|期中|期末|测验/i.test(title);
 }
 
+const BY_CATEGORY: Record<string, number> = { exam: 120, lab: 120, project: 150, reading: 25, survey: 10, participation: 0, discussion: 40, quiz: 45 };
+
 export function estimateMinutes(row: ItemRow): number {
-  if (row.kind === 'event') return 0;
+  if (row.kind === 'event' && row.category !== 'exam') return 0;
+  if (row.category && row.category in BY_CATEGORY) return BY_CATEGORY[row.category];
   if (/\b(exam|midterm|final)\b|考试|期中|期末/i.test(row.title)) return 120;
-  if (row.kind === 'quiz') return 45;
+  if (row.kind === 'quiz' && row.category !== 'homework') return 45;
   if (row.kind === 'discussion') return 40;
   if (row.kind === 'page') return 20;
   if (row.kind === 'note') return 30;
@@ -68,6 +73,7 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
       courseName: course ? courseDisplayName(course) : null, schoolId: school?.id ?? null,
       schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: row.due_at, htmlUrl: row.html_url,
       points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
+      category: row.category ?? null, categorySource: row.category_source ?? null, syllabusNote: row.syllabus_note ?? null,
     };
   };
 }

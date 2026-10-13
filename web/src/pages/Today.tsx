@@ -1,5 +1,5 @@
 import { useApi } from '../api.ts';
-import { fmtRelative } from '../format.ts';
+import { fmtDue, fmtRelative } from '../format.ts';
 import { TaskList } from '../components/TaskRow.tsx';
 import { ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
 import { Link } from '../router.tsx';
@@ -92,6 +92,20 @@ export function Today() {
             </Section>
           </div>
           <aside className="today-side">
+            {data.exams.length ? (
+              <div className="card card-pad exam-card">
+                <div className="kicker">Exams ahead</div>
+                <h3 style={{ fontFamily: 'var(--font-zh)', fontSize: 18, margin: '2px 0 10px' }}>近期考试</h3>
+                <ul className="notice-list">
+                  {data.exams.map((e) => (
+                    <li key={e.id} style={{ ['--c' as string]: e.color }}>
+                      <span className="notice-title">{e.title}</span>
+                      <div className="small"><span className="course-chip"><i />{e.courseName}</span> · <span className="mono">{fmtDue(e.dueAt, now)}</span></div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <DailyCard overview={data} />
             <div className="card card-pad">
               <div className="kicker">Notices</div>

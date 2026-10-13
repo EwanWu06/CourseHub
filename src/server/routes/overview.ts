@@ -35,6 +35,8 @@ export function registerOverview(app: Hono, db: DB): void {
     const todayList = tasks.filter((t) => due(t) >= t0 && due(t) < t1);
     const next3 = tasks.filter((t) => due(t) >= t1 && due(t) < t4);
     const overdue = tasks.filter((t) => due(t) < t0 && (t.status === 'overdue' || t.status === 'missing'));
+    const exams = listItems(db, { from: now.toISOString(), to: new Date(now.getTime() + 30 * DAY).toISOString() })
+      .filter((i) => i.category === 'exam').map(view).filter((t) => t.status !== 'done');
     const schools = listSchools(db);
     return c.json({
       now: now.toISOString(),
@@ -48,6 +50,7 @@ export function registerOverview(app: Hono, db: DB): void {
       today: todayList,
       next3,
       overdue,
+      exams,
       announcements: latestAnnouncements(db, 10),
       latestDaily: latestReport(db, 'daily') ?? null,
       loginNeeded: schools.filter((s) => s.status === 'needs_login').map((s) => ({ id: s.id, name: s.name, statusDetail: s.status_detail })),

@@ -7,7 +7,7 @@ import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool, getSchool, updateSchool } from '../src/db/schools.ts';
 import { getCourse, listCourses } from '../src/db/courses.ts';
-import { getItem } from '../src/db/items.ts';
+import { getItem, setItemCategory } from '../src/db/items.ts';
 import { pendingChanges } from '../src/db/changes.ts';
 import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
@@ -181,6 +181,27 @@ test('assignments deleted in Canvas are flagged removed; planner-only items are 
     assert.equal(getItem(db, `${schoolId}:q:801`)!.removed, 0);
     assert.equal(getItem(db, `${schoolId}:n:71`)!.removed, 0);
     assert.equal(getItem(db, `${schoolId}:a:5002`)!.removed, 0);
+  } finally {
+    await done(mock);
+  }
+});
+
+test('items are categorised from assignment groups; a user override survives the next sync', async () => {
+  const { db, mock, schoolId } = await setup('alpha');
+  try {
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null });
+    const cat = (id: string) => getItem(db, `${schoolId}:${id}`)!.category;
+    assert.equal(cat('a:5002'), 'homework');
+    assert.equal(cat('a:5004'), 'quiz');
+    assert.equal(cat('a:5003'), 'lab');
+    assert.equal(cat('a:5006'), 'discussion');
+    assert.equal(cat('a:5012'), 'exam', 'Knowledge Checks: heavy group with few items');
+    assert.equal(cat('e:9001'), 'exam', 'calendar event titled Midterm Exam');
+    assert.equal(getItem(db, `${schoolId}:a:5012`)!.group_id, `${schoolId}:g:95`);
+    setItemCategory(db, `${schoolId}:a:5002`, 'exam', 'user');
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null });
+    assert.equal(cat('a:5002'), 'exam');
+    assert.equal(getItem(db, `${schoolId}:a:5002`)!.category_source, 'user');
   } finally {
     await done(mock);
   }

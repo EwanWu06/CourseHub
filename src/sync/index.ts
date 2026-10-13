@@ -14,7 +14,8 @@ import { log } from '../util/log.ts';
 import { errorText, newStats } from './context.ts';
 import type { SyncContext, SyncStats } from './context.ts';
 import { syncCourses } from './courses.ts';
-import { markCourseRemovals, syncAssignments, syncCalendarEvents, syncMissing, syncPlanner, syncQuizzes } from './items.ts';
+import { markCourseRemovals, syncAssignmentGroups, syncAssignments, syncCalendarEvents, syncMissing, syncPlanner, syncQuizzes } from './items.ts';
+import { categorizeSchool } from './category.ts';
 import { mergeIcs } from './icsMerge.ts';
 import { syncCourseContent, syncInbox } from './content.ts';
 import { rebuildWeeks } from '../weeks/build.ts';
@@ -64,6 +65,7 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
   const courses = await syncCourses(ctx);
   for (const course of courses.filter((c) => !c.hidden)) {
     await guarded(ctx, course.name, async () => {
+      await syncAssignmentGroups(ctx, course);
       const assignments = await syncAssignments(ctx, course);
       const quizzes = await syncQuizzes(ctx, course);
       markCourseRemovals(ctx, course, assignments, quizzes);
@@ -81,6 +83,7 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
   const icsUrl = getSchool(db, school.id)?.ics_url;
   if (icsUrl) await guarded(ctx, '日历订阅', async () => mergeIcs({ ...ctx, apiOk: true }, await fetchIcs(icsUrl)));
 
+  categorizeSchool(db, school.id);
   stats.mode = 'api';
   updateSchool(db, school.id, { status: 'ok', status_detail: null, last_sync_at: now.toISOString(), last_ok_at: now.toISOString() });
 }
@@ -96,6 +99,7 @@ async function icsOnly(db: DB, school: SchoolRow, now: Date, stats: SyncStats): 
       stats.errors.push(`日历订阅: ${errorText(err)}`);
     }
   }
+  categorizeSchool(db, school.id);
   updateSchool(db, school.id, { last_sync_at: now.toISOString() });
 }
 

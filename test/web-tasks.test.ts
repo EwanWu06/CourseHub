@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupByDay, sealFor, monthGrid, providerNote } from '../web/src/lib/tasks.ts';
+import { groupByDay, sealFor, monthGrid, providerNote, CATEGORY_LABEL } from '../web/src/lib/tasks.ts';
 import type { TaskView } from '../web/src/types.ts';
 
 const NOW = new Date('2026-10-12T17:00:00Z'); // Mon 10:00 PDT
 function t(id: string, dueAt: string | null, p: Partial<TaskView> = {}): TaskView {
-  return { id, title: id, kind: 'assignment', provider: 'canvas', courseId: 'c', courseName: 'BIO 3', schoolId: 's', schoolName: 'S', color: '#00f', dueAt, htmlUrl: null, points: 10, status: 'todo', estMinutes: 45, source: 'api', localDone: false, ...p };
+  return { id, title: id, kind: 'assignment', provider: 'canvas', courseId: 'c', courseName: 'BIO 3', schoolId: 's', schoolName: 'S', color: '#00f', dueAt, htmlUrl: null, points: 10, status: 'todo', estMinutes: 45, source: 'api', localDone: false, category: null, categorySource: null, syllabusNote: null, ...p };
 }
 
 test('groupByDay orders local days and names today/tomorrow', () => {
@@ -48,4 +48,17 @@ test('providerNote reminds where publisher work really lives', () => {
   assert.equal(providerNote('webassign'), 'WebAssign · 以平台为准');
   assert.equal(providerNote('canvas'), null);
   assert.equal(providerNote('manual'), null);
+});
+
+test('exams get the 考 seal unless done; missing/overdue still come first', () => {
+  assert.equal(sealFor(t('k', '2026-10-20T06:59:00Z', { category: 'exam' }), NOW), '考');
+  assert.equal(sealFor(t('k2', null, { category: 'exam' }), NOW), '考');
+  assert.equal(sealFor(t('k3', '2026-10-10T06:59:00Z', { category: 'exam', status: 'missing' }), NOW), '缺');
+  assert.equal(sealFor(t('k4', '2026-10-20T06:59:00Z', { category: 'exam', status: 'done' }), NOW), null);
+  assert.equal(sealFor(t('k5', '2026-10-10T06:59:00Z', { category: 'exam', status: 'past' }), NOW), null);
+});
+
+test('category labels', () => {
+  assert.equal(CATEGORY_LABEL.exam, '考试');
+  assert.equal(CATEGORY_LABEL.reading, '讲课视频 / 阅读');
 });

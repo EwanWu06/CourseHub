@@ -11,7 +11,7 @@ export interface MockSubmission {
 export interface MockAssignment {
   id: string; name: string; description: string; due_at: string | null; unlock_at?: string | null; lock_at?: string | null;
   points_possible: number | null; submission_types: string[]; is_quiz_assignment?: boolean; quiz_id?: string;
-  discussion_topic_id?: string; external_url?: string; submission: MockSubmission;
+  discussion_topic_id?: string; external_url?: string; submission: MockSubmission; group?: string;
 }
 export interface MockModuleItem {
   id: string; title: string; type: 'File' | 'Page' | 'Assignment' | 'Quiz' | 'Discussion' | 'ExternalUrl' | 'ExternalTool' | 'SubHeader';
@@ -31,6 +31,7 @@ export interface MockCourse {
   term: { id: string; name: string; start_at: string | null; end_at: string | null };
   restricted?: boolean; score: number | null; grade: string | null; syllabus_body: string | null; tabs: string[];
   filesListForbidden?: boolean; assignments: MockAssignment[]; quizzes: MockQuiz[]; modules: MockModule[];
+  groups?: { id: string; name: string; weight: number }[];
   pages: MockPage[]; files: MockFile[]; topics: MockTopic[]; events: MockEvent[];
 }
 export interface MockPlannerExtra { type: 'planner_note' | 'wiki_page'; id: string; course_id: string | null; title: string; todo_date: string; page_url?: string }
@@ -105,18 +106,23 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
       id: '101', name: 'BIO 3 - General Biology', course_code: 'BIO 3', start_at: weekStart(5), end_at: weeksAfter(5, 16), term: fall,
       score: 92.3, grade: 'A-', tabs: TABS_ALL,
       syllabus_body: '<h2>BIO 3 Syllabus</h2><p>Week 6: Cell Respiration. Week 7: Photosynthesis.</p>',
+      groups: [
+        { id: '91', name: 'Homework', weight: 25 }, { id: '92', name: 'Reading Quizzes', weight: 10 }, { id: '93', name: 'Labs', weight: 20 },
+        { id: '94', name: 'Discussions', weight: 5 }, { id: '95', name: 'Knowledge Checks', weight: 30 }, { id: '96', name: 'Achieve', weight: 10 },
+      ],
       assignments: [
-        asg('5001', 'Homework 5', at(-2), { submission: sub('graded', { submitted_at: at(-3, 20, 0), score: 9, grade: '9' }) }),
-        asg('5002', 'Homework 6: Cell Respiration', at(0)),
-        asg('5003', 'Lab Report 3', inHours(2), { points_possible: 20 }),
-        asg('5004', 'Reading Quiz 6', at(1, 9, 0), { submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '802', points_possible: 5 }),
-        asg('5005', 'Lab Report 2', at(-5), { points_possible: 20, submission: sub('unsubmitted', { missing: true }) }),
-        asg('5006', 'Discussion: Ethics of GMOs', at(3), { submission_types: ['discussion_topic'], discussion_topic_id: '501' }),
-        asg('5007', 'Achieve: Chapter 6 Homework', at(4), { submission_types: ['external_tool'], external_url: 'https://achieve.macmillanlearning.com/courses/abc/assignments/123' }),
-        asg('5008', 'Lab safety signature', at(-3), { submission_types: ['on_paper'], points_possible: 0 }),
-        asg('5009', 'Extra credit essay', null),
-        asg('5010', 'Homework 4', at(-9), { submission: sub('unsubmitted', { excused: true }) }),
-        asg('5011', 'Final Project', at(40), { points_possible: 100 }),
+        asg('5001', 'Homework 5', at(-2), { group: '91', submission: sub('graded', { submitted_at: at(-3, 20, 0), score: 9, grade: '9' }) }),
+        asg('5002', 'Homework 6: Cell Respiration', at(0), { group: '91' }),
+        asg('5003', 'Lab Report 3', inHours(2), { group: '93', points_possible: 20 }),
+        asg('5004', 'Reading Quiz 6', at(1, 9, 0), { group: '92', submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '802', points_possible: 5 }),
+        asg('5005', 'Lab Report 2', at(-5), { group: '93', points_possible: 20, submission: sub('unsubmitted', { missing: true }) }),
+        asg('5006', 'Discussion: Ethics of GMOs', at(3), { group: '94', submission_types: ['discussion_topic'], discussion_topic_id: '501' }),
+        asg('5007', 'Achieve: Chapter 6 Homework', at(4), { group: '96', submission_types: ['external_tool'], external_url: 'https://achieve.macmillanlearning.com/courses/abc/assignments/123' }),
+        asg('5008', 'Lab safety signature', at(-3), { group: '93', submission_types: ['on_paper'], points_possible: 0 }),
+        asg('5009', 'Extra credit essay', null, { group: '91' }),
+        asg('5010', 'Homework 4', at(-9), { group: '91', submission: sub('unsubmitted', { excused: true }) }),
+        asg('5011', 'Final Project', at(40), { group: '91', points_possible: 100 }),
+        asg('5012', 'Knowledge Check 2', null, { group: '95', points_possible: 100, submission_types: ['on_paper'] }),
       ],
       quizzes: [
         { id: '801', title: 'Practice Quiz (ungraded)', due_at: at(6), quiz_type: 'practice_quiz', assignment_id: null, points_possible: null },

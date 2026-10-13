@@ -24,7 +24,11 @@ export interface ItemRow {
   missing: number; late: number; excused: number; score: number | null; grade: string | null;
   canvas_done: number; local_done: number; source: 'api' | 'ics' | 'manual'; module_id: string | null;
   first_seen_at: string; updated_at: string; removed: number;
+  group_id: string | null; category: string | null; category_source: string | null;
+  syllabus_date: string | null; syllabus_note: string | null;
 }
+
+export interface AssignmentGroupRow { id: string; course_id: string; name: string; weight: number | null; position: number }
 
 export interface ModuleRow {
   id: string; course_id: string; canvas_id: string; name: string; position: number; unlock_at: string | null;

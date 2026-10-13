@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, refreshAll } from '../api.ts';
 import { fmtCountdown, fmtDue } from '../format.ts';
-import { KIND_LABEL, STATUS_LABEL, providerNote, sealFor } from '../lib/tasks.ts';
+import { CATEGORY_LABEL, KIND_LABEL, STATUS_LABEL, providerNote, sealFor } from '../lib/tasks.ts';
 import { Link } from '../router.tsx';
 import type { TaskView } from '../types.ts';
 import { Icon } from './Icon.tsx';
@@ -11,6 +11,31 @@ function countdownTone(t: TaskView, now: Date): string {
   if (!t.dueAt || t.status !== 'todo') return '';
   const h = (Date.parse(t.dueAt) - now.getTime()) / 3_600_000;
   return h < 24 ? 'hot' : h < 48 ? 'warm' : '';
+}
+
+function CategoryChip({ task }: { task: TaskView }) {
+  const [cat, setCat] = useState(task.category);
+  useEffect(() => setCat(task.category), [task.category]);
+  const change = async (value: string) => {
+    const next = value === 'auto' ? null : value;
+    try {
+      const t = await api<TaskView>(`/api/items/${encodeURIComponent(task.id)}`, { method: 'PATCH', body: { category: next } });
+      setCat(t.category);
+      refreshAll();
+    } catch {
+      setCat(task.category);
+    }
+  };
+  const user = task.categorySource === 'user';
+  return (
+    <label className={`cat-chip ${cat === 'exam' ? 'is-exam' : ''} ${user ? 'is-user' : ''}`} title={user ? '你手动设置的类别（点击可修改）' : '自动判断的类别，不对的话点一下修改'}>
+      <select value={cat ?? ''} onChange={(e) => void change(e.target.value)} aria-label="类别">
+        {!cat ? <option value="">{KIND_LABEL[task.kind]}</option> : null}
+        {Object.entries(CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        {user ? <option value="auto">↺ 恢复自动判断</option> : null}
+      </select>
+    </label>
+  );
 }
 
 export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: { task: TaskView; now?: Date; showDate?: boolean; index?: number }) {
@@ -50,11 +75,12 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
           {task.courseName ? (
             <Link to={`/courses/${task.courseId}`} className="course-chip"><i />{task.courseName}</Link>
           ) : task.schoolName ? <span className="course-chip"><i />{task.schoolName}</span> : null}
-          <span>{KIND_LABEL[task.kind]}</span>
+          <CategoryChip task={task} />
           {task.points ? <span className="mono">{task.points} 分</span> : null}
           {note ? <span className="provider">{note}</span> : null}
           {task.source === 'ics' ? <span title="登录过期期间来自日历订阅，提交状态未知">日历订阅</span> : null}
         </div>
+        {task.syllabusNote ? <div className="syllabus-note">📅 {task.syllabusNote}</div> : null}
       </div>
       <div className="task-side">
         <div className="due-box">

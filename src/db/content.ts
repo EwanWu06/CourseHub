@@ -1,6 +1,6 @@
 import type { DB } from './index.ts';
 import { nowIso } from './index.ts';
-import type { ConversationRow, FileRow, ModuleItemRow, ModuleRow, PageRow, TextStatus, TopicRow } from './types.ts';
+import type { AssignmentGroupRow, ConversationRow, FileRow, ModuleItemRow, ModuleRow, PageRow, TextStatus, TopicRow } from './types.ts';
 import { all, insertRow, one, pick, run, updateRow } from './sql.ts';
 
 function upsert(db: DB, table: string, row: Record<string, unknown>, cols: readonly string[]): void {
@@ -130,4 +130,14 @@ export function upsertConversation(db: DB, row: ConversationRow): void {
 export function listConversations(db: DB, schoolId?: string): ConversationRow[] {
   return all<ConversationRow>(db, `SELECT * FROM conversations ${schoolId ? 'WHERE school_id = $schoolId' : ''}
       ORDER BY last_at DESC`, schoolId ? { schoolId } : {});
+}
+
+// ---- assignment groups ----
+export function upsertAssignmentGroup(db: DB, row: AssignmentGroupRow): void {
+  upsert(db, 'assignment_groups', row as unknown as Record<string, unknown>, ['id', 'course_id', 'name', 'weight', 'position']);
+}
+
+export function listAssignmentGroups(db: DB, courseId: string): (AssignmentGroupRow & { count: number })[] {
+  return all<AssignmentGroupRow & { count: number }>(db, `SELECT g.*, (SELECT COUNT(*) FROM items i WHERE i.group_id = g.id AND i.removed = 0) AS count
+      FROM assignment_groups g WHERE g.course_id = $courseId ORDER BY g.position`, { courseId });
 }
