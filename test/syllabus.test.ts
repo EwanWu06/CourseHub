@@ -15,7 +15,7 @@ import { listWeeks } from '../src/db/study.ts';
 import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
 import { makeTaskViewer } from '../src/reports/data.ts';
-import { buildSyllabusInput, dateMentioned, applySyllabusAnalysis, analyzeSyllabus } from '../src/ai/syllabus.ts';
+import { buildSyllabusInput, dateMentioned, timeMentioned, applySyllabusAnalysis, analyzeSyllabus } from '../src/ai/syllabus.ts';
 import type { SyllabusResult } from '../src/ai/syllabus.ts';
 import { addDays, atLocal, localDateStr } from '../src/util/time.ts';
 
@@ -134,4 +134,17 @@ test('analyzeSyllabus calls Claude once per distinct input', async () => {
   assert.equal(readdirSync(rec).filter((f) => f.startsWith('argv-')).length, 1);
   const prompt = readdirSync(rec).find((f) => f.startsWith('stdin-'))!;
   assert.ok(prompt);
+});
+
+test('timeMentioned reads times the way syllabi write them, ranges included', () => {
+  const ucla = 'Midterm 1 (100 Points) Tuesday October 20 (6:30-7:50 pm)';
+  assert.ok(timeMentioned(ucla, '18:30'));
+  assert.ok(!timeMentioned(ucla, '06:30'), 'the pm at the end of the range applies to its start');
+  assert.ok(timeMentioned('Final 11:00–12:15 p.m.', '11:00'), 'a range that crosses noon starts in the morning');
+  assert.ok(!timeMentioned('Final 11:00–12:15 p.m.', '23:00'));
+  assert.ok(timeMentioned('Quiz at 9am sharp', '09:00'));
+  assert.ok(timeMentioned('exam 6:30 PM in room 2', '18:30'));
+  assert.ok(timeMentioned('Exam starts 18:30', '18:30'));
+  assert.ok(!timeMentioned('Exam starts 18:30', '06:30'));
+  assert.ok(!timeMentioned('6 amazing problems', '06:00'));
 });

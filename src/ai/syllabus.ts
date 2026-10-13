@@ -111,12 +111,37 @@ export function dateMentioned(text: string, ymd: string): boolean {
   ].some((re) => re.test(text));
 }
 
-function timeMentioned(text: string, hhmm: string): boolean {
-  const [h, mi] = hhmm.split(':').map(Number);
-  const h12 = ((h + 11) % 12) + 1;
-  const ampm = h < 12 ? 'a' : 'p';
-  const mins = mi ? `:${pad(mi)}` : '(?::00)?';
-  return new RegExp(`\\b0?${h}:${pad(mi)}\\b|\\b${h12}${mins}\\s*${ampm}\\.?m\\.?`, 'i').test(text);
+/** Every clock time a text states, as 24h "HH:MM": "6:30-7:50 pm" (the pm covers both ends), "9am", "6:30 p.m.", "18:30". */
+function timesIn(text: string): Set<string> {
+  const t = text.toLowerCase();
+  const out = new Set<string>();
+  const used: [number, number][] = [];
+  const h24 = (h: number, ap: string) => (h % 12) + (ap === 'p' ? 12 : 0);
+  const add = (minutes: number) => out.add(`${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`);
+  const free = (i: number) => !used.some(([a, b]) => i >= a && i < b);
+  for (const m of t.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\b\.?/g)) {
+    const [sh, sm, eh, em] = [Number(m[1]), Number(m[2] ?? 0), Number(m[3]), Number(m[4] ?? 0)];
+    if (sh > 12 || eh > 12 || sm > 59 || em > 59) continue;
+    const end = h24(eh, m[5]) * 60 + em;
+    let begin = h24(sh, m[5]) * 60 + sm;
+    if (begin > end) begin = h24(sh, m[5] === 'p' ? 'a' : 'p') * 60 + sm; // "11:00-12:15 pm" starts in the morning
+    add(begin);
+    add(end);
+    used.push([m.index, m.index + m[0].length]);
+  }
+  for (const m of t.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\b\.?/g)) {
+    if (!free(m.index) || Number(m[1]) > 12 || Number(m[2] ?? 0) > 59) continue;
+    add(h24(Number(m[1]), m[3]) * 60 + Number(m[2] ?? 0));
+  }
+  for (const m of t.matchAll(/\b(\d{1,2}):(\d{2})\b(?!\s*(?:[ap]\.?m\b|-|–|to\b))/g)) {
+    if (!free(m.index) || Number(m[1]) > 23 || Number(m[2]) > 59) continue;
+    add(Number(m[1]) * 60 + Number(m[2]));
+  }
+  return out;
+}
+
+export function timeMentioned(text: string, hhmm: string): boolean {
+  return timesIn(text).has(hhmm);
 }
 
 function normalize(s: string): string {
