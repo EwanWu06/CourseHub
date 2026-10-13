@@ -15,6 +15,7 @@ let db: DB;
 let app: ReturnType<typeof createApp>;
 const syncCalls: unknown[] = [];
 const loginCalls: string[] = [];
+const guideCalls: [string, number, boolean][] = [];
 let releaseSync: () => void = () => {};
 
 before(async () => {
@@ -29,6 +30,10 @@ before(async () => {
       syncCalls.push(opts);
       await new Promise<void>((r) => { releaseSync = r; });
       return {};
+    },
+    enqueueGuide: (courseId, week, force) => {
+      guideCalls.push([courseId, week, force]);
+      return true;
     },
     startLogin: async (_db, schoolId) => {
       loginCalls.push(schoolId);
@@ -208,8 +213,26 @@ test('settings validate input and merge', async () => {
   assert.equal((await json(await call('/api/settings'))).aiModel, 'opus');
 });
 
+test('study endpoints list weeks, show a week\'s materials and queue generation', async () => {
+  const index = await json<{ course: { id: string }; currentWeek: number }[]>(await call('/api/study'));
+  assert.equal(index.find((c) => c.course.id === 'alpha:101')!.currentWeek, 6);
+  const course = await json(await call('/api/study/alpha:101'));
+  assert.equal(course.weeks.length, 16);
+  const w6 = course.weeks.find((w: { week: number }) => w.week === 6);
+  assert.ok(w6.materialCount > 0);
+  assert.equal(w6.guide, null);
+  const week = await json(await call('/api/study/alpha:101/6'));
+  const pdf = week.materials.find((m: { title: string }) => m.title === 'Week6_Cell_Respiration.pdf');
+  assert.ok(pdf.hasText);
+  assert.match(pdf.url, /\/courses\/101\/files\/7001$/);
+  assert.ok(week.assignments.some((a: { title: string; dueAt: string }) => a.title === 'Homework 6: Cell Respiration' && a.dueAt));
+  assert.equal(week.guide.status, null);
+  assert.equal((await call('/api/study/alpha:101/6/generate', { method: 'POST', body: { force: true } })).status, 202);
+  assert.deepEqual(guideCalls, [['alpha:101', 6, true]]);
+  assert.equal((await call('/api/study/alpha:101/99')).status, 404);
+});
+
 test('not-yet-built features answer 501; unknown API paths 404; the app shell is served', async () => {
-  assert.equal((await call('/api/study/alpha:101')).status, 501);
   assert.equal((await call('/api/reports')).status, 501);
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

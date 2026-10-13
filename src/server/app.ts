@@ -13,6 +13,7 @@ import { registerProxy } from './routes/proxy.ts';
 import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
 import { registerStatic } from './routes/static.ts';
+import { registerStudy } from './routes/study.ts';
 import { makeSyncStarter, registerSync } from './routes/sync.ts';
 import type { SyncHandle } from './routes/sync.ts';
 import { HttpError } from './routes/util.ts';
@@ -43,7 +44,8 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   registerSchools(app, db, { startLogin: deps.startLogin, startSync: starter.start });
   registerSync(app, db, starter);
   registerSettings(app, db);
-  for (const prefix of ['/api/study', '/api/reports']) {
+  registerStudy(app, db, { enqueueGuide: deps.enqueueGuide });
+  for (const prefix of ['/api/reports']) {
     app.all(prefix, (c) => c.json({ error: '尚未实现' }, 501));
     app.all(`${prefix}/*`, (c) => c.json({ error: '尚未实现' }, 501));
   }

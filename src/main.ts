@@ -10,6 +10,7 @@ import { createScheduler, defaultJobs } from './scheduler.ts';
 import { createApp } from './server/app.ts';
 import { makeSyncStarter } from './server/routes/sync.ts';
 import { syncAll } from './sync/index.ts';
+import { resumeQueuedGuides } from './ai/guide.ts';
 import { log } from './util/log.ts';
 
 ensureDataDirs();
@@ -22,6 +23,7 @@ const scheduler = createScheduler(db, defaultJobs(db, { runSync: (opts) => start
 
 const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (info) => {
   log('info', `Course Hub listening on http://127.0.0.1:${info.port}`);
+  resumeQueuedGuides(db);
   scheduler.start();
 });
 

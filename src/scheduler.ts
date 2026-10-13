@@ -11,6 +11,7 @@ import { refreshSso } from './auth/login.ts';
 import { loadAuth } from './auth/store.ts';
 import { cleanTmp } from './content/download.ts';
 import { enqueueSyllabus } from './ai/syllabus.ts';
+import { autoEnqueueGuides } from './ai/guide.ts';
 import { listCourses } from './db/courses.ts';
 import { getSettings as readSettings } from './db/settings.ts';
 import type { SyncOptions } from './sync/index.ts';
@@ -114,6 +115,13 @@ export function defaultJobs(db: DB, deps: { runSync: (opts: SyncOptions) => Prom
         await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
         // Re-read syllabi whose sources changed (the analysis itself skips unchanged input).
         if (readSettings(db).aiEnabled) for (const c of listCourses(db)) enqueueSyllabus(db, c.id);
+      },
+    },
+    {
+      name: 'guides', // keep "this week + next week" study guides ready (only re-runs when material changed)
+      isDue: (now, last, s) => isIntervalDue(now, last, 0.5, { start: s.syncWindowStart, end: s.syncWindowEnd }),
+      run: async (now) => {
+        autoEnqueueGuides(db, now);
       },
     },
     {
