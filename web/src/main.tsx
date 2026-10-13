@@ -10,9 +10,13 @@ import '@fontsource/ibm-plex-mono/500.css';
 import 'katex/dist/katex.min.css';
 import './styles.css';
 import { App } from './App.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {/* last line of defence: even a broken frame shows how to recover instead of a blank page */}
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

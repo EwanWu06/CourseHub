@@ -94,7 +94,7 @@ export function Layout({ children }: { children: ReactNode }) {
     wasRunning.current = running;
   }, [sync.data?.running]);
 
-  const urgent = (overview.data?.counts.overdue ?? 0) + (overview.data?.counts.today ?? 0);
+  const urgent = (overview.data?.counts?.overdue ?? 0) + (overview.data?.counts?.today ?? 0);
   const lastSync = schools.data?.map((s) => s.last_sync_at).filter(Boolean).sort().at(-1) ?? null;
 
   const syncNow = async () => {
@@ -144,7 +144,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="small muted">上次同步：{fmtRelative(lastSync)}</span>
           <div className="side-links">
             <Link to="/status" aria-current={path === '/status' ? 'page' : undefined}>
-              <Icon name="pulse" size={15} />系统状态{(status.data?.issues.length ?? 0) > 0 ? <span className="new-dot" title={`${status.data!.issues.length} 个问题`} /> : null}
+              <Icon name="pulse" size={15} />系统状态{(status.data?.issues?.length ?? 0) > 0 ? <span className="new-dot" title={`${status.data!.issues.length} 个问题`} /> : null}
             </Link>
             <Link to="/help" aria-current={path === '/help' ? 'page' : undefined}><Icon name="help" size={15} />帮助</Link>
           </div>
