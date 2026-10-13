@@ -56,3 +56,28 @@ export interface Overview {
   latestDaily: ReportRow | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];
 }
+
+export interface CourseDetailT {
+  course: Course; school: SchoolBrief | null; currentWeek: number | null;
+  counts: { assignments: number; modules: number; pages: number; files: number; announcements: number; discussions: number };
+}
+
+export interface ModuleT { id: string; name: string; position: number; unlock_at: string | null; week_start: number | null; week_end: number | null; week_source: string | null }
+
+export interface ModuleItemT {
+  id: string; title: string; type: string; content_id: string | null; page_url: string | null; html_url: string | null; external_url: string | null;
+  position: number; indent: number; ref_id: string | null;
+  ref: { kind: string; id: string; status?: TaskStatus; dueAt?: string | null; textStatus?: string; size?: number | null } | null;
+}
+
+export interface PageT { id: string; course_id: string; url: string; title: string; body_html?: string | null; updated_at: string | null; front_page: number; html_url: string }
+
+export interface FileT { id: string; name: string; content_type: string | null; size: number | null; updated_at: string | null; html_url: string; text_status: string; text_pages: number | null; text_error: string | null }
+
+export interface TopicT { id: string; kind: 'announcement' | 'discussion'; title: string; message_html: string | null; posted_at: string | null; author: string | null; html_url: string; reply_count: number; unread_count: number; first_seen_at: string }
+
+export interface GradesT { score: number | null; grade: string | null; htmlUrl: string; items: { id: string; title: string; kind: string; dueAt: string | null; points: number | null; score: number | null; grade: string | null; status: TaskStatus; htmlUrl: string | null; excused: boolean }[] }
+
+export interface SyllabusT { html: string | null; htmlUrl: string; files: FileT[] }
+
+export interface ConversationT { id: string; school_id: string; subject: string; last_message: string | null; last_at: string | null; participants: string; context_name: string | null; workflow_state: string; html_url: string; schoolName: string; color: string }
