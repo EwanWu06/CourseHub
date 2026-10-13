@@ -149,6 +149,16 @@ export class SerialQueue {
     return true;
   }
 
+  /** Runs `fn` in the queue and resolves with its result; `front` puts it ahead of jobs still waiting (reports before guides). */
+  run<T>(key: string, fn: () => Promise<T>, opts: { front?: boolean } = {}): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const job = { key, fn: () => fn().then(resolve, reject) };
+      if (opts.front) this.queue.unshift(job);
+      else this.queue.push(job);
+      void this.pump();
+    });
+  }
+
   onIdle(): Promise<void> {
     if (!this.current && this.queue.length === 0) return Promise.resolve();
     return new Promise((resolve) => this.idle.push(resolve));

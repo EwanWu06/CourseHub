@@ -9,6 +9,8 @@ import { createSchool } from '../src/db/schools.ts';
 import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
 import { createApp } from '../src/server/app.ts';
+import { saveReport } from '../src/db/reports.ts';
+import { computeDaily } from '../src/reports/data.ts';
 
 let mock: MockCanvas;
 let db: DB;
@@ -16,6 +18,8 @@ let app: ReturnType<typeof createApp>;
 const syncCalls: unknown[] = [];
 const loginCalls: string[] = [];
 const guideCalls: [string, number, boolean][] = [];
+const reportCalls: string[] = [];
+let releaseReport: () => void = () => {};
 let releaseSync: () => void = () => {};
 
 before(async () => {
@@ -30,6 +34,11 @@ before(async () => {
       syncCalls.push(opts);
       await new Promise<void>((r) => { releaseSync = r; });
       return {};
+    },
+    generateReport: async (type) => {
+      reportCalls.push(type);
+      await new Promise<void>((r) => { releaseReport = r; });
+      return saveReport(db, { type, period: '2026-10-12', content: JSON.stringify({ kind: type, data: computeDaily(db, new Date()), ai: null, aiError: 'test' }) });
     },
     enqueueGuide: (courseId, week, force) => {
       guideCalls.push([courseId, week, force]);
@@ -234,8 +243,31 @@ test('study endpoints list weeks, show a week\'s materials and queue generation'
   assert.equal((await call('/api/study/alpha:101/99')).status, 404);
 });
 
-test('not-yet-built features answer 501; unknown API paths 404; the app shell is served', async () => {
-  assert.equal((await call('/api/reports')).status, 501);
+test('reports: list with headlines, read one, start generation once at a time', async () => {
+  saveReport(db, { type: 'daily', period: '2026-10-11', content: JSON.stringify({ kind: 'daily', data: computeDaily(db, new Date()), ai: { headline: '先交 HW 6', blocks: [], tips: [] }, aiError: null }) });
+  const list = await json<{ id: string; headline: string }[]>(await call('/api/reports?type=daily'));
+  assert.deepEqual(list.map((r) => [r.id, r.headline]), [['daily:2026-10-11', '先交 HW 6']]);
+  const one = await json(await call('/api/reports/daily:2026-10-11'));
+  assert.equal(one.report.ai.headline, '先交 HW 6');
+  assert.equal((await call('/api/reports/daily%3A2026-10-11')).status, 200, 'an encoded id works too');
+  assert.equal(one.type, 'daily');
+  assert.equal((await call('/api/reports/daily:2099-01-01')).status, 404);
+  assert.equal((await call('/api/reports/monthly/generate', { method: 'POST' })).status, 400);
+  assert.equal((await call('/api/reports/daily/generate', { method: 'POST' })).status, 202);
+  assert.equal((await call('/api/reports/daily/generate', { method: 'POST' })).status, 409);
+  assert.deepEqual((await json(await call('/api/reports/status'))).running, ['daily']);
+  releaseReport();
+  for (let i = 0; i < 50 && (await json(await call('/api/reports/status'))).running.length; i++) await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual((await json(await call('/api/reports/status'))).running, []);
+  assert.deepEqual(reportCalls, ['daily']);
+  assert.ok((await json<{ id: string }[]>(await call('/api/reports'))).some((r) => r.id === 'daily:2026-10-12'));
+  const o = await json(await call('/api/overview'));
+  assert.equal(o.latestDaily.id, 'daily:2026-10-12');
+  assert.equal(typeof o.latestDaily.headline, 'string');
+  assert.equal('content' in o.latestDaily, false, 'the Today page gets a brief, not the whole report');
+});
+
+test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');
   assert.equal(page.status, 200);

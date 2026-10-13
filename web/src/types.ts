@@ -54,7 +54,7 @@ export interface Overview {
   counts: { overdue: number; today: number; next3: number; missing: number };
   today: TaskView[]; next3: TaskView[]; overdue: TaskView[]; exams: TaskView[];
   announcements: Announcement[];
-  latestDaily: ReportRow | null;
+  latestDaily: { id: string; type: 'daily'; period: string; createdAt: string; headline: string } | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];
 }
 
@@ -107,3 +107,36 @@ export interface StudyWeekDetail {
   assignments: TaskView[];
   guide: { status: GuideBrief['status'] | null; generatedAt: string | null; error: string | null; model: string | null; stale: boolean; queued: boolean; content: GuideContent | null };
 }
+
+export interface ReportListItem { id: string; type: 'daily' | 'weekly'; period: string; createdAt: string; headline: string; aiError: string | null }
+
+export interface DailyData {
+  date: string; overdue: TaskView[]; dueToday: TaskView[]; next3Days: TaskView[]; laterThisWeek: TaskView[]; eventsToday: TaskView[]; examsSoon: TaskView[];
+  announcements: { id: string; courseName: string; title: string; postedAt: string; htmlUrl: string }[];
+  grades: { itemId: string; title: string; courseName: string; score: number | null; points: number | null }[];
+  dueChanges: { itemId: string; title: string; courseName: string; from: string | null; to: string | null }[];
+  loginNeeded: { schoolId: string; name: string }[];
+  studyFocus: { courseId: string; courseName: string; week: number; overview: string | null; status: string | null }[];
+  totals: { todo: number; minutes: number };
+}
+
+export interface DailyAi { headline: string; blocks: { slot: '上午' | '下午' | '晚上'; title: string; item_id?: string; minutes: number; note?: string }[]; tips: string[] }
+
+export interface WeeklyData {
+  weekStart: string; weekEnd: string;
+  last: { onTime: number; late: number; missing: number; graded: { title: string; courseName: string; score: number | null; points: number | null }[] };
+  next: {
+    days: { date: string; items: TaskView[]; minutes: number }[];
+    exams: TaskView[];
+    topics: { courseId: string; courseName: string; week: number; title: string | null; topics: string[]; overview: string | null }[];
+  };
+  busiest: string | null;
+}
+
+export interface WeeklyAi { headline: string; focus: string[]; risks: string[]; suggestions: string[] }
+
+export type ReportBody =
+  | { kind: 'daily'; data: DailyData; ai: DailyAi | null; aiError: string | null }
+  | { kind: 'weekly'; data: WeeklyData; ai: WeeklyAi | null; aiError: string | null };
+
+export interface ReportDetail { id: string; type: 'daily' | 'weekly'; period: string; createdAt: string; headline: string; report: ReportBody }

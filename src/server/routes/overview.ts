@@ -5,6 +5,8 @@ import { latestReport } from '../../db/reports.ts';
 import { listSchools } from '../../db/schools.ts';
 import { all } from '../../db/sql.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
+import { headlineOf } from '../../reports/view.ts';
+import type { AnyReport } from '../../reports/view.ts';
 import type { TaskView } from '../../reports/data.ts';
 import { addDays, atLocal, localDateStr } from '../../util/time.ts';
 import { courseDisplayName } from '../../util/course.ts';
@@ -20,6 +22,18 @@ export function latestAnnouncements(db: DB, limit: number, courseId?: string) {
     WHERE t.kind = 'announcement' AND c.hidden = 0 AND c.active = 1 ${courseId ? 'AND c.id = $courseId' : ''}
     ORDER BY COALESCE(t.posted_at, t.first_seen_at) DESC LIMIT $limit`, courseId ? { limit, courseId } : { limit })
     .map((a) => ({ id: a.id, title: a.title, postedAt: a.posted_at ?? a.first_seen_at, htmlUrl: a.html_url, courseId: a.course_id, courseName: courseDisplayName(a), color: a.color, schoolName: a.school_name }));
+}
+
+function dailyBrief(db: DB) {
+  const row = latestReport(db, 'daily');
+  if (!row) return null;
+  let headline = '';
+  try {
+    headline = headlineOf(JSON.parse(row.content) as AnyReport);
+  } catch {
+    headline = '';
+  }
+  return { id: row.id, type: row.type, period: row.period, createdAt: row.created_at, headline };
 }
 
 export function registerOverview(app: Hono, db: DB): void {
@@ -52,7 +66,7 @@ export function registerOverview(app: Hono, db: DB): void {
       overdue,
       exams,
       announcements: latestAnnouncements(db, 10),
-      latestDaily: latestReport(db, 'daily') ?? null,
+      latestDaily: dailyBrief(db),
       loginNeeded: schools.filter((s) => s.status === 'needs_login').map((s) => ({ id: s.id, name: s.name, statusDetail: s.status_detail })),
     });
   });

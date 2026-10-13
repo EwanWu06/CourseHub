@@ -10,6 +10,7 @@ import { registerCourses } from './routes/courses.ts';
 import { registerItems } from './routes/items.ts';
 import { registerOverview } from './routes/overview.ts';
 import { registerProxy } from './routes/proxy.ts';
+import { registerReports } from './routes/reports.ts';
 import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
 import { registerStatic } from './routes/static.ts';
@@ -45,10 +46,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   registerSync(app, db, starter);
   registerSettings(app, db);
   registerStudy(app, db, { enqueueGuide: deps.enqueueGuide });
-  for (const prefix of ['/api/reports']) {
-    app.all(prefix, (c) => c.json({ error: '尚未实现' }, 501));
-    app.all(`${prefix}/*`, (c) => c.json({ error: '尚未实现' }, 501));
-  }
+  registerReports(app, db, { generate: deps.generateReport });
   app.all('/api/*', (c) => c.json({ error: '不存在' }, 404));
   registerProxy(app, db);
   registerStatic(app);

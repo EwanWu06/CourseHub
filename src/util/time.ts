@@ -42,3 +42,25 @@ export function atLocal(dateStr: string, hh: number, mm: number): Date {
   const { y, m, d } = parseDateStr(dateStr);
   return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
+
+const WEEKDAYS_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+export function weekdayZh(dateStr: string): string {
+  const { y, m, d } = parseDateStr(dateStr);
+  return WEEKDAYS_ZH[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+/** Chinese wording of a due time relative to now — the same phrasing as the web UI's fmtDue. */
+export function describeDue(iso: string | null, now: Date, opts: { dateOnly?: boolean } = {}): string {
+  if (!iso) return '无截止日期';
+  const d = new Date(iso);
+  const day = localDateStr(d);
+  const diff = daysBetween(localDateStr(now), day);
+  const time = opts.dateOnly ? '' : ` ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (diff === 0) return `今天${time}`;
+  if (diff === 1) return `明天${time}`;
+  if (diff === -1) return `昨天${time}`;
+  if (diff >= 2 && diff <= 6) return `${weekdayZh(day)}${time}`;
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return `${d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`} ${weekdayZh(day)}${time}`;
+}

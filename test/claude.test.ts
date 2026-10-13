@@ -88,3 +88,18 @@ test('SerialQueue runs one job at a time and ignores duplicate keys', async () =
   assert.deepEqual(order, ['a', 'b']);
   assert.equal(q.running, null);
 });
+
+test('SerialQueue.run resolves with the job\'s result and can jump ahead of waiting jobs', async () => {
+  const q = new SerialQueue();
+  const order: string[] = [];
+  let release: () => void = () => {};
+  q.add('guide-1', () => new Promise<void>((r) => { order.push('guide-1'); release = r; }));
+  q.add('guide-2', async () => { order.push('guide-2'); });
+  const report = q.run('report', async () => { order.push('report'); return 42; }, { front: true });
+  assert.deepEqual(q.pending(), ['report', 'guide-2']);
+  release();
+  assert.equal(await report, 42);
+  await q.onIdle();
+  assert.deepEqual(order, ['guide-1', 'report', 'guide-2']);
+  await assert.rejects(q.run('boom', async () => { throw new Error('boom'); }), /boom/);
+});

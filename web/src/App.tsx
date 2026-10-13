@@ -7,6 +7,8 @@ import { Deadlines } from './pages/Deadlines.tsx';
 import { Courses } from './pages/Courses.tsx';
 import { CourseDetail } from './pages/CourseDetail.tsx';
 import { Inbox } from './pages/Inbox.tsx';
+import { Reports } from './pages/Reports.tsx';
+import { ReportView } from './pages/ReportView.tsx';
 import { StudyCourse, StudyIndex } from './pages/Study.tsx';
 import { StudyWeek } from './pages/StudyWeek.tsx';
 import { matchRoute } from './route-match.ts';
@@ -23,8 +25,8 @@ const ROUTES: Route[] = [
   { pattern: '/study', render: () => <StudyIndex /> },
   { pattern: '/study/:courseId', render: (p) => <StudyCourse key={p.courseId} courseId={p.courseId} /> },
   { pattern: '/study/:courseId/:week', render: (p) => <StudyWeek key={`${p.courseId}#${p.week}`} courseId={p.courseId} week={Number(p.week)} /> },
-  { pattern: '/reports', render: () => <Placeholder title="报告" kicker="Reports" /> },
-  { pattern: '/reports/:id', render: () => <Placeholder title="报告" kicker="Report" /> },
+  { pattern: '/reports', render: () => <Reports /> },
+  { pattern: '/reports/:id', render: (p) => <ReportView key={p.id} id={p.id} /> },
   { pattern: '/settings', render: () => <Settings /> },
 ];
 

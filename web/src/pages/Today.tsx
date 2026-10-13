@@ -1,4 +1,6 @@
-import { useApi } from '../api.ts';
+import { refreshAll, useApi } from '../api.ts';
+import { dateKey } from '../lib/tasks.ts';
+import { useReportGenerator } from '../lib/useReportGenerator.ts';
 import { fmtDue, fmtRelative } from '../format.ts';
 import { TaskList } from '../components/TaskRow.tsx';
 import { ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
@@ -18,26 +20,25 @@ function greeting(h: number): string {
 
 function DailyCard({ overview }: { overview: Overview }) {
   const r = overview.latestDaily;
-  const today = new Date().toISOString().slice(0, 10);
-  let headline: string | null = null;
-  if (r) {
-    try {
-      headline = (JSON.parse(r.content) as { ai?: { headline?: string } | null }).ai?.headline ?? null;
-    } catch {
-      headline = null;
-    }
-  }
+  const today = dateKey(new Date());
+  const gen = useReportGenerator('daily', refreshAll);
   return (
     <div className="card card-pad">
       <div className="kicker">Daily brief</div>
       <h3 style={{ fontFamily: 'var(--font-zh)', fontSize: 18, margin: '2px 0 8px' }}>今日日报</h3>
-      {r ? (
+      {r && r.period === today ? (
         <>
-          <p style={{ margin: 0 }}>{headline ?? '今天的日报已生成。'}</p>
-          <Link to={`/reports/${encodeURIComponent(r.id)}`} className="btn btn-sm" style={{ marginTop: 12 }}>查看日报{r.period !== today ? `（${r.period}）` : ''}</Link>
+          <p style={{ margin: 0 }}>{r.headline || '今天的日报已生成。'}</p>
+          <Link to={`/reports/${r.id}`} className="btn btn-sm" style={{ marginTop: 12 }}>查看日报</Link>
         </>
       ) : (
-        <p className="muted small" style={{ margin: 0 }}>日报每天早上自动生成：今天要交什么、怎么安排时间。</p>
+        <>
+          <p className="muted small" style={{ margin: 0 }}>日报每天早上 7:00 自动生成：今天要交什么、怎么安排时间。{r ? <> 上一份：<Link to={`/reports/${r.id}`}>{r.period}</Link></> : null}</p>
+          <button type="button" className="btn btn-sm" style={{ marginTop: 12 }} disabled={gen.busy} onClick={() => void gen.start()}>
+            {gen.busy ? <><span className="spinner" /> 正在生成…</> : '现在生成'}
+          </button>
+          <ErrorNote error={gen.error} />
+        </>
       )}
     </div>
   );
