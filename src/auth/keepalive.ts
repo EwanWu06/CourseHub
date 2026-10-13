@@ -6,13 +6,17 @@ import { getSchool, listSchools, updateSchool } from '../db/schools.ts';
 import type { SchoolRow } from '../db/types.ts';
 import { syncRunning } from '../sync/index.ts';
 import { log } from '../util/log.ts';
-import { silentRelogin } from './login.ts';
+import { silentReloginResult } from './login.ts';
 import { loadAuth, makeClient, persistClientCookies } from './store.ts';
 
 export type KeepAliveResult = 'ok' | 'renewed' | 'expired' | 'skipped' | 'error';
 
+const couldNotTry = new Map<string, number>();
+const MAX_COULD_NOT_TRY = 3; // ≈ 1.5 h of keep-alive rounds before telling the user
+
 export interface KeepAliveOptions {
-  relogin?: ((schoolId: string) => Promise<boolean>) | null;
+  /** true = renewed, false = the user must log in, 'error' = the attempt couldn't run this time */
+  relogin?: ((schoolId: string) => Promise<boolean | 'error'>) | null;
   onLoginNeeded?: (school: SchoolRow) => void;
 }
 
@@ -38,8 +42,19 @@ export async function keepAlive(db: DB, schoolId: string, opts: KeepAliveOptions
       return 'error';
     }
   }
-  const relogin = opts.relogin === undefined ? (id: string) => silentRelogin(db, id) : opts.relogin;
-  if (relogin && (await relogin(schoolId))) {
+  const relogin = opts.relogin === undefined ? (id: string) => silentReloginResult(db, id) : opts.relogin;
+  const outcome = relogin ? await relogin(schoolId) : false;
+  if (outcome === 'error') {
+    // Chrome didn't start / the page never loaded (busy Mac, network blip): not a lost login — try again next round
+    const n = (couldNotTry.get(schoolId) ?? 0) + 1;
+    couldNotTry.set(schoolId, n);
+    if (n < MAX_COULD_NOT_TRY) {
+      log('warn', `silent renewal for ${schoolId} could not run (${n} in a row); retrying later`);
+      return 'error';
+    }
+  }
+  couldNotTry.delete(schoolId);
+  if (outcome === true) {
     const fresh = getSchool(db, schoolId)!;
     // silentRelogin already counted itself; injected relogins (tests, other flows) are counted here
     if (fresh.renewals === school.renewals) updateSchool(db, schoolId, { renewals: school.renewals + 1 });

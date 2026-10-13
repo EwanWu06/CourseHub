@@ -136,9 +136,23 @@ export function refreshSso(db: DB, schoolId: string, opts: { timeoutMs?: number 
 }
 
 export async function silentRelogin(db: DB, schoolId: string, opts: { timeoutMs?: number; forceSso?: boolean } = {}): Promise<boolean> {
+  return (await silentReloginOutcome(db, schoolId, opts)) === 'renewed';
+}
+
+/** For keep-alive and sync: true = renewed, false = the user must log in, 'error' = couldn't try this time. */
+export async function silentReloginResult(db: DB, schoolId: string): Promise<boolean | 'error'> {
+  const o = await silentReloginOutcome(db, schoolId);
+  return o === 'renewed' ? true : o === 'error' ? 'error' : false;
+}
+
+/**
+ * 'renewed' — back in without the user; 'password' — the school wants the user (password / Duo);
+ * 'error' — the attempt itself couldn't run (Chrome didn't start on a busy Mac, the page never loaded): try later.
+ */
+export async function silentReloginOutcome(db: DB, schoolId: string, opts: { timeoutMs?: number; forceSso?: boolean } = {}): Promise<'renewed' | 'password' | 'error'> {
   const school = getSchool(db, schoolId);
   const auth = loadAuth(schoolId);
-  if (!school || !auth || school.auth_mode === 'token' || auth.cookies.length === 0) return false;
+  if (!school || !auth || school.auth_mode === 'token' || auth.cookies.length === 0) return 'password';
   try {
     return await withChromeLock(async () => {
       const session = await launchChrome({ url: 'about:blank', headless: true, userAgent: auth.userAgent });
@@ -150,7 +164,7 @@ export async function silentRelogin(db: DB, schoolId: string, opts: { timeoutMs?
         await session.context.clearCookies(); // the shared profile may hold older cookies; the saved set is the truth
         await session.context.addCookies(keep.map((c) => ({ ...c, sameSite: c.sameSite ?? 'Lax' })));
         const page = session.context.pages()[0] ?? (await session.context.newPage());
-        await page.goto(`${school.base_url}/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => undefined);
+        const loaded = await page.goto(`${school.base_url}/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 }).then(() => true, () => false);
         const deadline = Date.now() + (opts.timeoutMs ?? 45_000);
         let passwordSince: number | null = null;
         while (Date.now() < deadline) {
@@ -158,20 +172,20 @@ export async function silentRelogin(db: DB, schoolId: string, opts: { timeoutMs?
           if (me) {
             await saveSession(db, schoolId, session.context, session.userAgent, me.name, true);
             log('info', `silent re-login succeeded for ${schoolId}`);
-            return true;
+            return 'renewed' as const;
           }
           const needsPassword = await page.locator('input[type=password]').first().isVisible().catch(() => false);
           passwordSince = needsPassword ? passwordSince ?? Date.now() : null;
           if (passwordSince && Date.now() - passwordSince > 10_000) break;
           await sleep(1500);
         }
-        return false;
+        return loaded ? ('password' as const) : ('error' as const);
       } finally {
         await session.close();
       }
     });
   } catch (err) {
-    log('warn', `silent re-login failed for ${schoolId}`, err);
-    return false;
+    log('warn', `silent re-login could not run for ${schoolId}`, err);
+    return 'error';
   }
 }

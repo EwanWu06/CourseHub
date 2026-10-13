@@ -3,7 +3,6 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { extractText, getDocumentProxy } from 'unpdf';
 import { decodeEntities } from '../util/html.ts';
 import { readZipText } from './zip.ts';
 
@@ -103,6 +102,7 @@ export async function extractFile(filePath: string, name: string, contentType?: 
     const pages = pptxPages(buf);
     return { kind, pages, scanned: false };
   }
+  const { extractText, getDocumentProxy } = await import('unpdf'); // loaded on first PDF
   const pdf = await getDocumentProxy(buf);
   const { text } = await extractText(pdf, { mergePages: false });
   const pages = text.map((t) => t.replace(/[ \t]+\n/g, '\n').trim());

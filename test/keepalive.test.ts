@@ -92,3 +92,35 @@ test('token schools and schools without a login are skipped', async () => {
     await mock.close();
   }
 });
+
+test('when Chrome itself could not run, the renewal is retried later instead of asking the user to log in', async () => {
+  const { db, mock, id } = await setup();
+  try {
+    mock.expireSessions();
+    const told: string[] = [];
+    const broken = { relogin: async () => 'error' as const, onLoginNeeded: (s: { id: string }) => { told.push(s.id); } };
+    assert.equal(await keepAlive(db, id, broken), 'error');
+    assert.equal(await keepAlive(db, id, broken), 'error');
+    assert.equal(getSchool(db, id)!.status, 'ok', 'two failures to start Chrome are not a lost login');
+    assert.deepEqual(told, []);
+    assert.equal(await keepAlive(db, id, broken), 'expired', 'the third in a row is reported');
+    assert.equal(getSchool(db, id)!.status, 'needs_login');
+    assert.deepEqual(told, [id]);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a successful renewal resets the count of Chrome failures', async () => {
+  const { db, mock, id } = await setup();
+  try {
+    mock.expireSessions();
+    assert.equal(await keepAlive(db, id, { relogin: async () => 'error' as const }), 'error');
+    assert.equal(await keepAlive(db, id, { relogin: async () => 'error' as const }), 'error');
+    assert.equal(await keepAlive(db, id, { relogin: async () => true }), 'renewed');
+    mock.expireSessions();
+    assert.equal(await keepAlive(db, id, { relogin: async () => 'error' as const }), 'error', 'counting starts again');
+  } finally {
+    await mock.close();
+  }
+});

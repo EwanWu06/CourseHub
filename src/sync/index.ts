@@ -9,7 +9,7 @@ import { finishSyncRun, startSyncRun } from '../db/runs.ts';
 import { one } from '../db/sql.ts';
 import type { SchoolRow } from '../db/types.ts';
 import { makeClient, persistClientCookies } from '../auth/store.ts';
-import { silentRelogin } from '../auth/login.ts';
+import { silentReloginResult } from '../auth/login.ts';
 import { log } from '../util/log.ts';
 import { errorText, newStats } from './context.ts';
 import type { SyncContext, SyncStats } from './context.ts';
@@ -25,7 +25,7 @@ export interface SyncOptions {
   schoolId?: string;
   reason: string;
   now?: Date;
-  relogin?: ((schoolId: string) => Promise<boolean>) | null;
+  relogin?: ((schoolId: string) => Promise<boolean | 'error'>) | null;
   onLoginNeeded?: (school: SchoolRow) => void;
 }
 
@@ -122,17 +122,22 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
         if (!(err instanceof SessionExpiredError)) throw err;
         persistClientCookies(schoolId, client);
         const isToken = school.auth_mode === 'token';
-        const relogin = isToken ? null : opts.relogin === undefined ? (id: string) => silentRelogin(db, id) : opts.relogin;
-        if (relogin && (await relogin(schoolId))) {
+        const relogin = isToken ? null : opts.relogin === undefined ? (id: string) => silentReloginResult(db, id) : opts.relogin;
+        const outcome = relogin ? await relogin(schoolId) : false;
+        if (outcome === true) {
           client = makeClient(getSchool(db, schoolId)!);
           if (!client) throw new Error('重新登录后没有保存登录状态');
           await apiSync(db, getSchool(db, schoolId)!, client, now, stats);
+        } else if (outcome === 'error') {
+          // the renewal couldn't run (Chrome didn't start…): not a lost login; keep-alive retries soon
+          updateSchool(db, schoolId, { status: 'error', status_detail: '登录过期了，自动续期这次没能运行（Chrome 没启动），稍后会自动再试' });
+          await icsOnly(db, getSchool(db, schoolId)!, now, stats);
         } else {
           updateSchool(db, schoolId, {
             status: 'needs_login',
             status_detail: isToken ? '访问令牌无效或已过期，请在设置里更新' : '登录已过期，请重新登录',
           });
-          opts.onLoginNeeded?.(getSchool(db, schoolId)!);
+          if (school.status !== 'needs_login') opts.onLoginNeeded?.(getSchool(db, schoolId)!); // once, not every sync
           await icsOnly(db, getSchool(db, schoolId)!, now, stats);
         }
       }

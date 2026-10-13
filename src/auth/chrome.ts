@@ -4,7 +4,6 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import net from 'node:net';
 import type { AddressInfo } from 'node:net';
-import { chromium } from 'playwright-core';
 import type { Browser, BrowserContext } from 'playwright-core';
 import { chromeBin, paths } from '../config.ts';
 
@@ -81,6 +80,8 @@ export async function launchChrome(opts: { url: string; headless: boolean; profi
   let browser: Browser;
   try {
     // Generous timeout: on a busy 8GB Mac attaching to a fresh Chrome can take a while.
+    // loaded on first use: playwright-core is most of the server's start-up time and is only needed for logins
+    const { chromium } = await import('playwright-core');
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 60_000 });
   } catch (err) {
     proc.kill('SIGKILL'); // never leave an orphaned Chrome behind

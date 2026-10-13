@@ -62,3 +62,32 @@ test('token schools never try a browser re-login', async () => {
     await mock.close();
   }
 });
+
+test('a sync whose renewal could not even start Chrome falls back to the calendar without crying wolf', async () => {
+  const { db, mock, id } = await setup();
+  try {
+    await syncSchool(db, id, { reason: 'test', relogin: null });
+    mock.expireSessions();
+    const needed: string[] = [];
+    await syncSchool(db, id, { reason: 'test', relogin: async () => 'error' as const, onLoginNeeded: (s) => needed.push(s.id) });
+    assert.deepEqual(needed, []);
+    const s = getSchool(db, id)!;
+    assert.notEqual(s.status, 'needs_login');
+    assert.match(s.status_detail ?? '', /续期/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('while a school stays logged out, later syncs do not alert again', async () => {
+  const { db, mock, id } = await setup();
+  try {
+    await syncSchool(db, id, { reason: 'test', relogin: null });
+    mock.expireSessions();
+    const needed: string[] = [];
+    for (let i = 0; i < 3; i++) await syncSchool(db, id, { reason: 'test', relogin: async () => false, onLoginNeeded: (s) => needed.push(s.id) });
+    assert.deepEqual(needed, [id]);
+  } finally {
+    await mock.close();
+  }
+});
