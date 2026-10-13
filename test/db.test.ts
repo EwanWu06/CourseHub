@@ -283,3 +283,17 @@ test('a personal note on a task survives re-syncs', () => {
   setItemNote(db, 'x:1', null);
   assert.equal(getItem(db, 'x:1')!.user_note, null);
 });
+
+test('the queries that grow with time use an index, not a full scan', () => {
+  const db = freshDb();
+  const plan = (sql: string) => (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[]).map((r) => r.detail).join(' | ');
+  assert.match(plan("SELECT * FROM changes WHERE notified = 0"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM changes WHERE created_at >= '2026-01-01'"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM topics WHERE course_id = 'x' AND kind = 'announcement'"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM files WHERE course_id = 'x'"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM pages WHERE course_id = 'x'"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM items WHERE school_id = 'x' AND removed = 0"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM ai_runs WHERE started_at >= '2026-01-01'"), /USING (COVERING )?INDEX/);
+  assert.match(plan("SELECT * FROM sync_runs WHERE school_id = 'x' ORDER BY id DESC LIMIT 1"), /USING (COVERING )?INDEX|USING INTEGER PRIMARY KEY/);
+  assert.match(plan("SELECT * FROM reminders_sent WHERE sent_at < '2026-01-01'"), /USING (COVERING )?INDEX/);
+});

@@ -281,4 +281,16 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX study_qa_week ON study_qa(course_id, week);
   `,
+  // 8: indexes for the tables that keep growing term after term (changes, topics, files, pages, runs…)
+  `
+  CREATE INDEX IF NOT EXISTS changes_pending ON changes(notified);
+  CREATE INDEX IF NOT EXISTS changes_created ON changes(created_at);
+  CREATE INDEX IF NOT EXISTS topics_course_kind ON topics(course_id, kind);
+  CREATE INDEX IF NOT EXISTS files_course ON files(course_id);
+  CREATE INDEX IF NOT EXISTS pages_course ON pages(course_id);
+  CREATE INDEX IF NOT EXISTS items_school ON items(school_id, removed);
+  CREATE INDEX IF NOT EXISTS ai_runs_started ON ai_runs(started_at);
+  CREATE INDEX IF NOT EXISTS sync_runs_school ON sync_runs(school_id, id);
+  CREATE INDEX IF NOT EXISTS reminders_sent_at ON reminders_sent(sent_at);
+  `,
 ];
