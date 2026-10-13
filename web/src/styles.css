@@ -397,6 +397,60 @@
   .inbox-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
 }
 
+@layer components {
+  .study-card { text-decoration: none; color: inherit; overflow: hidden; display: block; transition: transform .15s; }
+  .study-card:hover { transform: translateY(-2px); }
+  .study-meta { display: flex; align-items: baseline; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .week-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .week-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; min-height: 150px; text-decoration: none; color: inherit; transition: transform .15s, border-color .15s; }
+  .week-card:hover { transform: translateY(-2px); border-color: var(--c); }
+  .week-card.is-current { border: 2px solid var(--c); box-shadow: 0 0 0 4px color-mix(in oklab, var(--c) 14%, transparent), var(--shadow); }
+  .week-card.is-empty { opacity: .6; }
+  .week-no { font-family: var(--font-zh); font-size: 18px; font-weight: 600; }
+  .week-title { color: var(--ink-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .topics { display: flex; flex-wrap: wrap; gap: 4px; }
+  .topic { font-size: 12px; padding: 1px 8px; border-radius: 6px; background: color-mix(in oklab, var(--c) 12%, transparent); color: var(--ink-2); }
+  .title-topics { font-family: var(--font-body); font-size: 15px; color: var(--muted); margin-left: 14px; letter-spacing: 0; font-weight: 400; }
+  .guide { display: flex; flex-direction: column; }
+  .guide-overview { border-left: 4px solid var(--c); }
+  .guide-overview .lead { font-size: 17px; line-height: 1.75; margin: 4px 0 10px; }
+  .md p { margin: .4em 0; }
+  .md h1, .md h2, .md h3, .md h4 { font-family: var(--font-zh); font-weight: 600; margin: .9em 0 .35em; line-height: 1.35; }
+  .md h1, .md h2 { font-size: 19px; }
+  .md h3, .md h4 { font-size: 16px; }
+  .md > :first-child { margin-top: 0; }
+  .md ul, .md ol { margin: .4em 0; padding-left: 1.4em; }
+  .md table { border-collapse: collapse; margin: .6em 0; }
+  .md td, .md th { border: 1px solid var(--rule); padding: 4px 10px; }
+  .md code { background: var(--paper-2); padding: 0 4px; border-radius: 4px; }
+  .md .katex-display { margin: .6em 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+  .objectives { margin: 0; padding-left: 1.2em; }
+  .objectives li { margin: 6px 0; }
+  .objectives li::marker { color: var(--c); }
+  .concept { border-left: 3px solid var(--c); }
+  .concept-term { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .concept-term .en { font-family: var(--font-display); font-size: 21px; font-weight: 600; }
+  .concept-term .zh { font-family: var(--font-zh); font-size: 16px; color: var(--muted); }
+  .concept-block { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: color-mix(in oklab, var(--moss) 9%, var(--card)); }
+  .concept-block.warn { background: color-mix(in oklab, var(--seal) 7%, var(--card)); }
+  .concept-block .label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .1em; }
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .source-chip { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--rule-strong); text-decoration: none; color: var(--ink-2); }
+  .source-chip:hover { border-color: var(--ink-2); }
+  .cheatsheet { background: color-mix(in oklab, var(--amber) 6%, var(--card)); }
+  .relations { margin: 10px 0 0; padding-left: 1.2em; color: var(--ink-2); font-size: 14px; }
+  .relations li { margin: 4px 0; }
+  .quiz summary { display: flex; gap: 10px; align-items: flex-start; padding: 14px 18px; cursor: pointer; }
+  .quiz summary .md { flex: 1; }
+  .q-no { font-family: var(--font-display); font-weight: 600; color: var(--c); min-width: 1.2em; }
+  .quiz[open] summary { border-bottom: 1px dashed var(--rule); }
+  .quiz .answer { padding: 12px 18px 14px 46px; background: color-mix(in oklab, var(--moss) 7%, var(--card)); border-radius: 0 0 var(--radius) var(--radius); }
+  .quiz .answer::before { content: '答案'; font-size: 12px; font-weight: 600; color: var(--moss); letter-spacing: .1em; }
+  .plan { margin: 0; padding: 0; list-style: none; counter-reset: plan; }
+  .plan li { counter-increment: plan; display: flex; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--rule); }
+  .plan li::before { content: counter(plan); font-family: var(--font-display); font-weight: 600; color: var(--c); min-width: 1.2em; }
+}
+
 @layer utilities {
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nowrap { white-space: nowrap; }

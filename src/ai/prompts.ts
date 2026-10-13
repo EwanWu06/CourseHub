@@ -28,8 +28,9 @@ export const GUIDE_SCHEMA = {
         required: ['term', 'term_zh', 'explanation', 'example', 'pitfalls', 'sources'],
         properties: {
           term: { type: 'string' }, term_zh: { type: 'string' },
-          explanation: { type: 'string', description: 'Markdown，可含 LaTeX' },
-          example: { type: 'string' }, pitfalls: { type: 'string' },
+          explanation: { type: 'string', description: 'Markdown，可含 LaTeX；分段写清是什么、为什么、怎么用' },
+          example: { type: 'string', description: 'Markdown，可含 LaTeX；一个具体、带数字的例子' },
+          pitfalls: { type: 'string', description: 'Markdown 列表，每条单独一行、以 "- " 开头' },
           sources: { type: 'array', items: { type: 'object', required: ['material_id', 'page'], properties: { material_id: { type: 'string' }, page: { type: ['integer', 'null'] } } } },
         },
       },

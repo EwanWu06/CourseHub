@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export function Masthead({ kicker, title, aside }: { kicker: string; title: ReactNode; aside?: ReactNode }) {
+export function Masthead({ kicker, title, aside }: { kicker: ReactNode; title: ReactNode; aside?: ReactNode }) {
   return (
     <header className="masthead">
       <div>

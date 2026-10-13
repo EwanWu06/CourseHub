@@ -14,6 +14,11 @@ import { courseDisplayName } from '../../util/course.ts';
 import { currentWeek, lastWeek } from '../../weeks/build.ts';
 import { HttpError, readJson } from './util.ts';
 
+function schoolBrief(db: DB, id: string) {
+  const s = getSchool(db, id);
+  return s ? { id: s.id, name: s.name, color: s.color } : null;
+}
+
 function brief(c: CourseRow) {
   const { syllabus_html: _s, ...rest } = c;
   return { ...rest, display_name: courseDisplayName(c), tabs: c.tabs ? (JSON.parse(c.tabs) as string[]) : null };
@@ -30,9 +35,8 @@ export function registerStudy(app: Hono, db: DB, deps: { enqueueGuide?: (courseI
   app.get('/api/study', (c) => {
     const now = new Date();
     return c.json(listCourses(db).map((course) => {
-      const school = getSchool(db, course.school_id);
       return {
-        course: brief(course), school: school ? { id: school.id, name: school.name, color: school.color } : null,
+        course: brief(course), school: schoolBrief(db, course.school_id),
         currentWeek: currentWeek(db, course.id, now), lastWeek: lastWeek(db, course.id),
         ready: listGuides(db, course.id).filter((g) => g.status === 'ready').length,
       };
@@ -44,6 +48,7 @@ export function registerStudy(app: Hono, db: DB, deps: { enqueueGuide?: (courseI
     const guides = new Map(listGuides(db, course.id).map((g) => [g.week, g]));
     return c.json({
       course: brief(course),
+      school: schoolBrief(db, course.school_id),
       currentWeek: currentWeek(db, course.id, new Date()),
       weeks: listWeeks(db, course.id).map((w) => {
         const input = buildGuideInput(db, course.id, w.week);
@@ -66,7 +71,7 @@ export function registerStudy(app: Hono, db: DB, deps: { enqueueGuide?: (courseI
     const g = getGuide(db, course.id, week);
     const view = makeTaskViewer(db, new Date());
     return c.json({
-      course: brief(course), week, startDate: input.startDate, endDate: input.endDate, topics: input.topics, moduleNames: input.moduleNames,
+      course: brief(course), school: schoolBrief(db, course.school_id), week, startDate: input.startDate, endDate: input.endDate, topics: input.topics, moduleNames: input.moduleNames,
       materials: input.materials.map((m) => ({ id: m.id, kind: m.kind, title: m.title, url: m.url, pages: m.pages, scanned: m.scanned, hasText: m.text.length > 0 })),
       assignments: input.assignments.map((a) => getItem(db, a.id)).filter((x) => !!x).map((x) => view(x!)),
       guide: {

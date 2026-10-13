@@ -1,5 +1,6 @@
 // Screenshots pages with the installed Chrome (headless) for visual QA.
-//   node scripts/screenshot.ts <baseUrl> <outDir> <path> [path...] [--dark] [--mobile]
+//   node scripts/screenshot.ts <baseUrl> <outDir> <path> [path...] [--dark] [--mobile] [--slices]
+// --slices also saves long pages as 1400px-tall pieces (name-0.png, name-1.png, …) for reading one at a time.
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
@@ -23,6 +24,14 @@ for (const p of pages) {
   const name = `${p.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home'}-${flags.has('--dark') ? 'dark' : 'light'}-${viewport.width}.png`;
   await page.screenshot({ path: path.join(outDir, name), fullPage: true });
   console.log('saved', name);
+  if (flags.has('--slices')) {
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    for (let y = 0, i = 0; y < height; y += 1400, i++) {
+      const slice = name.replace(/\.png$/, `-${i}.png`);
+      await page.screenshot({ path: path.join(outDir, slice), fullPage: true, clip: { x: 0, y, width: viewport.width, height: Math.min(1400, height - y) } });
+      console.log('saved', slice);
+    }
+  }
 }
 if (errors.length) console.log('PAGE ERRORS:\n' + errors.join('\n'));
 await browser.close();

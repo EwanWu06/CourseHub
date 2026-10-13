@@ -85,3 +85,25 @@ export interface SyllabusT {
 }
 
 export interface ConversationT { id: string; school_id: string; subject: string; last_message: string | null; last_at: string | null; participants: string; context_name: string | null; workflow_state: string; html_url: string; schoolName: string; color: string }
+
+export interface StudyCourse { course: Course; school: { id: string; name: string; color: string } | null; currentWeek: number | null; lastWeek: number | null; ready: number }
+
+export interface GuideBrief { status: 'queued' | 'running' | 'ready' | 'failed'; stale: boolean; generatedAt: string | null; error: string | null }
+
+export interface StudyWeekRow { week: number; startDate: string; title: string | null; topics: string[]; materialCount: number; guide: GuideBrief | null }
+
+export interface StudyCourseDetail { course: Course; school: { id: string; name: string; color: string } | null; currentWeek: number | null; weeks: StudyWeekRow[]; undatedModules: { id: string; name: string }[] }
+
+export interface GuideContent {
+  overview: string; objectives: string[];
+  concepts: { term: string; term_zh: string; explanation: string; example: string; pitfalls: string; sources: { material_id: string; page: number | null }[] }[];
+  cheatsheet: string; assignments: { item_id: string; relation: string }[]; self_test: { question: string; answer: string }[];
+  study_plan: { step: string; minutes: number }[]; coverage: { level: 'full' | 'partial' | 'minimal'; note: string };
+}
+
+export interface StudyWeekDetail {
+  course: Course; school: { id: string; name: string; color: string } | null; week: number; startDate: string; endDate: string; topics: string[]; moduleNames: string[];
+  materials: { id: string; kind: string; title: string; url: string | null; pages: number | null; scanned: boolean; hasText: boolean }[];
+  assignments: TaskView[];
+  guide: { status: GuideBrief['status'] | null; generatedAt: string | null; error: string | null; model: string | null; stale: boolean; queued: boolean; content: GuideContent | null };
+}

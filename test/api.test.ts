@@ -218,10 +218,12 @@ test('study endpoints list weeks, show a week\'s materials and queue generation'
   assert.equal(index.find((c) => c.course.id === 'alpha:101')!.currentWeek, 6);
   const course = await json(await call('/api/study/alpha:101'));
   assert.equal(course.weeks.length, 16);
+  assert.match(course.school.color, /^#[0-9a-f]{6}$/i, 'the page can fall back to the school colour');
   const w6 = course.weeks.find((w: { week: number }) => w.week === 6);
   assert.ok(w6.materialCount > 0);
   assert.equal(w6.guide, null);
   const week = await json(await call('/api/study/alpha:101/6'));
+  assert.equal(week.school.name, 'alpha');
   const pdf = week.materials.find((m: { title: string }) => m.title === 'Week6_Cell_Respiration.pdf');
   assert.ok(pdf.hasText);
   assert.match(pdf.url, /\/courses\/101\/files\/7001$/);
