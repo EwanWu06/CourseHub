@@ -17,6 +17,7 @@ import { getSettings as readSettings } from './db/settings.ts';
 import type { SyncOptions } from './sync/index.ts';
 import { flushChangeNotices } from './notify/changes.ts';
 import { runReminders } from './notify/reminders.ts';
+import { backupDb } from './db/backup.ts';
 import { getReport } from './db/reports.ts';
 import { weeklyPeriod } from './reports/data.ts';
 import { generateDaily } from './reports/daily.ts';
@@ -218,6 +219,14 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
           if (s.login_at && Date.now() - Date.parse(s.login_at) < 20 * 3_600_000) continue; // just logged in
           await refreshSso(db, s.id);
         }
+      },
+    },
+    {
+      name: 'backup', // 03:30 daily snapshot of the database, 14 kept; caught up on wake
+      timeoutMs: 10 * 60_000,
+      isDue: (now, last) => isSlotDue(now, last, { hour: 3, minute: 30 }),
+      run: async (now) => {
+        backupDb(db, now);
       },
     },
     {

@@ -5,6 +5,7 @@ import { openDb } from '../src/db/index.ts';
 import { getJob, setJob } from '../src/db/runs.ts';
 import { DEFAULT_SETTINGS } from '../src/db/settings.ts';
 import { saveReport } from '../src/db/reports.ts';
+import { listBackups } from '../src/db/backup.ts';
 import { parseHHMM, lastSlotAtOrBefore, isSlotDue, isIntervalDue, createScheduler, defaultJobs } from '../src/scheduler.ts';
 import type { Job } from '../src/scheduler.ts';
 
@@ -163,4 +164,14 @@ test('a job that hangs is cut off at its time limit; the rest of the tick and la
   assert.match(getJob(db, 'stuck')!.last_error!, /超时/);
   await s.tick();
   assert.deepEqual(ran, ['after', 'after'], 'the scheduler is not wedged');
+});
+
+test('the backup job snapshots the database at 03:30, catching up after sleep', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const job = defaultJobs(db, { runSync: async () => {}, onLoginNeeded: () => {} }).find((j) => j.name === 'backup')!;
+  assert.equal(job.isDue(at('2026-10-12T16:30:00Z'), at('2026-10-11T11:00:00Z'), DEFAULT_SETTINGS), true, 'Mac was asleep at 03:30');
+  assert.equal(job.isDue(at('2026-10-12T16:30:00Z'), at('2026-10-12T10:31:00Z'), DEFAULT_SETTINGS), false);
+  await job.run(at('2026-10-12T16:30:00Z'));
+  assert.deepEqual(listBackups().map((b) => b.date), ['2026-10-12']);
 });

@@ -21,12 +21,13 @@ export function paths() {
     logs: path.join(d, 'logs'),
     notify: path.join(d, 'notify'),
     aiWork: path.join(d, 'ai-work'),
+    backups: path.join(d, 'backups'),
   };
 }
 
 export function ensureDataDirs(): void {
   const p = paths();
-  for (const dir of [p.text, p.tmp, p.profile, p.logs, p.notify, p.aiWork]) mkdirSync(dir, { recursive: true });
+  for (const dir of [p.text, p.tmp, p.profile, p.logs, p.notify, p.aiWork, p.backups]) mkdirSync(dir, { recursive: true });
   mkdirSync(p.auth, { recursive: true, mode: 0o700 });
 }
 

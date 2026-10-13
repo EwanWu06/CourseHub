@@ -2,8 +2,10 @@
 // (keep logins alive, sync + change alerts, 7:00 daily / Sunday 20:00 weekly reports, deadline reminders,
 // study guides, daily SSO refresh, cleanup).
 import { serve } from '@hono/node-server';
-import { PORT, ensureDataDirs } from './config.ts';
+import path from 'node:path';
+import { PORT, ensureDataDirs, paths } from './config.ts';
 import { cleanTmp } from './content/download.ts';
+import { checkDatabase, repairFromBackup } from './db/backup.ts';
 import { openDb } from './db/index.ts';
 import type { SchoolRow } from './db/types.ts';
 import { loginNeededNotice, notify } from './notify/mac.ts';
@@ -34,6 +36,12 @@ if (existing === 'other') {
   process.exit(1);
 }
 cleanTmp();
+// A damaged database is set aside and the newest good daily backup restored before anything opens it.
+let repaired: { restored: string | null } | null = null;
+if (checkDatabase(paths().db) === 'corrupt') {
+  repaired = repairFromBackup(paths().db);
+  log('error', `database was damaged; restored from ${repaired.restored ?? '(no backup — starting fresh)'}`);
+}
 const db = openDb();
 const onLoginNeeded = (school: SchoolRow) => void notify(loginNeededNotice(school));
 const starter = makeSyncStarter(db, syncAll, { onLoginNeeded });
@@ -44,6 +52,14 @@ const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (i
   log('info', `Course Hub listening on http://127.0.0.1:${info.port}`);
   resumeQueuedGuides(db);
   scheduler.start();
+  if (repaired) {
+    const from = repaired.restored ? path.basename(repaired.restored).replace(/^coursehub-|\.sqlite$/g, '') : null;
+    void notify({
+      title: '数据库已自动修复',
+      body: from ? `数据文件损坏，已从 ${from} 的备份恢复；之后勾选的完成和备注可能要重做。` : '数据文件损坏且没有备份，已重新开始；请在设置里重新登录各学校。',
+      url: `http://127.0.0.1:${PORT}/`,
+    });
+  }
 });
 
 function shutdown() {
