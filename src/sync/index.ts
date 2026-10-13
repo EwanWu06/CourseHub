@@ -16,6 +16,7 @@ import { syncCourses } from './courses.ts';
 import { markCourseRemovals, syncAssignments, syncCalendarEvents, syncMissing, syncPlanner, syncQuizzes } from './items.ts';
 import { mergeIcs } from './icsMerge.ts';
 import { syncCourseContent, syncInbox } from './content.ts';
+import { rebuildWeeks } from '../weeks/build.ts';
 
 export interface SyncOptions {
   schoolId?: string;
@@ -67,6 +68,7 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
       ctx.complete.add(course.id);
     });
     await guarded(ctx, `${course.name} 内容`, () => syncCourseContent(ctx, course));
+    await guarded(ctx, `${course.name} 周次`, async () => rebuildWeeks(db, course.id));
   }
   await guarded(ctx, '日历事件', () => syncCalendarEvents(ctx, courses));
   await guarded(ctx, '待办计划', () => syncPlanner(ctx, courses));
