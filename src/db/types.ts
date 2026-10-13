@@ -4,6 +4,7 @@ export interface SchoolRow {
   id: string; name: string; base_url: string; color: string; auth_mode: 'session' | 'token';
   ics_url: string | null; user_name: string | null; status: SchoolStatus; status_detail: string | null;
   last_sync_at: string | null; last_ok_at: string | null; links: string; created_at: string;
+  login_at: string | null; alive_at: string | null; renewals: number;
 }
 
 export interface CourseRow {

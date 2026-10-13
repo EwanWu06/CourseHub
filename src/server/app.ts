@@ -14,12 +14,14 @@ import { registerSchools } from './routes/schools.ts';
 import { registerSettings } from './routes/settings.ts';
 import { registerStatic } from './routes/static.ts';
 import { makeSyncStarter, registerSync } from './routes/sync.ts';
+import type { SyncHandle } from './routes/sync.ts';
 import { HttpError } from './routes/util.ts';
 
 export interface AppDeps {
   startLogin?: typeof interactiveLogin;
   runSync?: typeof syncAll;
   syncOptions?: Partial<SyncOptions>;
+  starter?: SyncHandle; // share the sync guard with the scheduler
   enqueueGuide?: (courseId: string, week: number, force: boolean) => boolean;
   generateReport?: (type: 'daily' | 'weekly') => Promise<ReportRow>;
 }
@@ -33,7 +35,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
     return c.json({ error: '服务器出错了，请看日志 data/logs/app.log' }, 500);
   });
 
-  const starter = makeSyncStarter(db, deps.runSync, deps.syncOptions);
+  const starter = deps.starter ?? makeSyncStarter(db, deps.runSync, deps.syncOptions);
   app.get('/api/health', (c) => c.json({ ok: true }));
   registerOverview(app, db);
   registerItems(app, db);

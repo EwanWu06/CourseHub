@@ -6,7 +6,7 @@ import { all, insertRow, one, pick, run, updateRow } from './sql.ts';
 export const SCHOOL_PALETTE = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '#0891b2', '#db2777', '#ca8a04'];
 
 const EDITABLE = ['name', 'base_url', 'color', 'auth_mode', 'ics_url', 'user_name', 'status', 'status_detail',
-  'last_sync_at', 'last_ok_at', 'links'] as const;
+  'last_sync_at', 'last_ok_at', 'links', 'login_at', 'alive_at', 'renewals'] as const;
 
 /** 'smc.instructure.com/' → 'https://smc.instructure.com'. Plain http is only kept for local test servers. */
 export function normalizeBaseUrl(input: string): string {

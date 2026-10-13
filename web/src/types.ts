@@ -15,6 +15,7 @@ export interface SchoolView {
   user_name: string | null; status: 'new' | 'ok' | 'needs_login' | 'error'; status_detail: string | null;
   last_sync_at: string | null; last_ok_at: string | null; links: { label: string; url: string }[]; created_at: string;
   failStreak: number; loginState: LoginState; hasAuth: boolean; hasToken: boolean;
+  login_at: string | null; alive_at: string | null; renewals: number;
 }
 
 export interface Course {

@@ -33,3 +33,8 @@ export function setJob(db: DB, name: string, patch: Partial<Omit<JobRow, 'name'>
   if (!getJob(db, name)) insertRow(db, 'jobs', { name });
   updateRow(db, 'jobs', { ...patch }, 'name = $__name', { __name: name });
 }
+
+export function pruneRuns(db: DB, beforeIso: string): void {
+  run(db, 'DELETE FROM sync_runs WHERE started_at < $before', { before: beforeIso });
+  run(db, 'DELETE FROM ai_runs WHERE started_at < $before', { before: beforeIso });
+}

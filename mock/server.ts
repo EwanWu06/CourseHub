@@ -17,6 +17,7 @@ export interface MockOptions {
   idp?: boolean;
   pageSize?: number;
   expiredBehavior?: 'redirect' | '401';
+  idleTimeoutMs?: number; // sessions die after this long without a request (like a school's inactivity timeout)
 }
 
 export interface MockCanvas {
@@ -73,7 +74,7 @@ const LOGIN_FORM = (action: string, error = '') => `<!doctype html><html><body><
 export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
   const data = buildFixtures(opts.variant, opts.now ?? new Date());
   const pageSize = opts.pageSize ?? 50;
-  const sessions = new Set<string>();
+  const sessions = new Map<string, number>(); // token → last request time
   const remembered = new Set<string>();
   const idpRemembered = new Set<string>();
   const tickets = new Set<string>();
@@ -95,8 +96,19 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
 
   function newSession(): string {
     const s = token();
-    sessions.add(s);
+    sessions.set(s, Date.now());
     return s;
+  }
+
+  /** Valid session? Refreshes its idle timer like a real server does on each request. */
+  function touch(s: string | undefined): boolean {
+    if (!s || !sessions.has(s)) return false;
+    if (opts.idleTimeoutMs && Date.now() - sessions.get(s)! > opts.idleTimeoutMs) {
+      sessions.delete(s);
+      return false;
+    }
+    sessions.set(s, Date.now());
+    return true;
   }
 
   function redirect(res: ServerResponse, location: string, cookies: string[] = []) {
@@ -317,8 +329,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
   }
 
   function authOf(req: IncomingMessage): Auth | null {
-    const s = parseCookies(req.headers.cookie).canvas_session;
-    if (s && sessions.has(s)) return 'session';
+    if (touch(parseCookies(req.headers.cookie).canvas_session)) return 'session';
     if (req.headers.authorization === `Bearer ${data.token}`) return 'token';
     return null;
   }
@@ -387,7 +398,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     }
 
     if (url.pathname === '/login' && req.method === 'GET') {
-      if (cookies.canvas_session && sessions.has(cookies.canvas_session)) return redirect(res, '/');
+      if (touch(cookies.canvas_session)) return redirect(res, '/');
       if (opts.idp) return redirect(res, `${idpUrl}/sso?return=${encodeURIComponent(`${baseUrl}/login/callback`)}`);
       if (rememberEnabled && cookies.pseudonym_credentials && remembered.has(cookies.pseudonym_credentials)) {
         return redirect(res, '/', [sessionCookie(newSession())]);
@@ -411,7 +422,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       return redirect(res, '/', [sessionCookie(newSession())]);
     }
     if (url.pathname === '/') {
-      if (cookies.canvas_session && sessions.has(cookies.canvas_session)) return html(res, '<h1>Dashboard</h1>');
+      if (touch(cookies.canvas_session)) return html(res, '<h1>Dashboard</h1>');
       return redirect(res, '/login');
     }
     const download = url.pathname.match(/^\/files\/(\d+)\/download$/);

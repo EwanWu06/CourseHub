@@ -223,4 +223,10 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (item_id, threshold)
   );
   `,
+  // 2: login keep-alive bookkeeping
+  `
+  ALTER TABLE schools ADD COLUMN login_at TEXT;
+  ALTER TABLE schools ADD COLUMN alive_at TEXT;
+  ALTER TABLE schools ADD COLUMN renewals INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

@@ -7,24 +7,34 @@ import { log } from '../../util/log.ts';
 import { HttpError, readJson } from './util.ts';
 
 export type SyncStarter = (opts: SyncOptions) => boolean;
+export interface SyncHandle { start: SyncStarter; busy: () => boolean; runAndWait: (opts: SyncOptions) => Promise<boolean> }
 
-/** One sync at a time per server; returns a starter that refuses while a run is in flight. */
-export function makeSyncStarter(db: DB, runSync: typeof syncAll = syncAll, extra: Partial<SyncOptions> = {}): { start: SyncStarter; busy: () => boolean } {
+/** One sync at a time per server (API clicks, after-login syncs and the scheduler share this guard). */
+export function makeSyncStarter(db: DB, runSync: typeof syncAll = syncAll, extra: Partial<SyncOptions> = {}): SyncHandle {
   let inFlight: Promise<unknown> | null = null;
   const busy = () => inFlight !== null || syncRunning() !== null;
-  const start: SyncStarter = (opts) => {
-    if (busy()) return false;
+  const launch = (opts: SyncOptions) => {
     inFlight = runSync(db, { ...extra, ...opts })
       .catch((err) => log('error', 'sync failed', err))
       .finally(() => {
         inFlight = null;
       });
+    return inFlight;
+  };
+  const start: SyncStarter = (opts) => {
+    if (busy()) return false;
+    void launch(opts);
     return true;
   };
-  return { start, busy };
+  const runAndWait = async (opts: SyncOptions) => {
+    if (busy()) return false;
+    await launch(opts);
+    return true;
+  };
+  return { start, busy, runAndWait };
 }
 
-export function registerSync(app: Hono, db: DB, starter: { start: SyncStarter; busy: () => boolean }): void {
+export function registerSync(app: Hono, db: DB, starter: SyncHandle): void {
   app.post('/api/sync', async (c) => {
     const body = await readJson<{ schoolId?: string }>(c).catch(() => ({ schoolId: undefined }));
     if (!starter.start({ schoolId: body.schoolId, reason: 'manual' })) throw new HttpError(409, '正在同步，请稍后再试');

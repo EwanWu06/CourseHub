@@ -8,7 +8,7 @@ import { openDb } from '../../src/db/index.ts';
 import { createSchool, getSchool } from '../../src/db/schools.ts';
 import { paths } from '../../src/config.ts';
 import { loadAuth } from '../../src/auth/store.ts';
-import { interactiveLogin, silentRelogin, getLoginState, cancelLogin } from '../../src/auth/login.ts';
+import { interactiveLogin, silentRelogin, getLoginState, cancelLogin, refreshSso } from '../../src/auth/login.ts';
 import { withChromeLock } from '../../src/auth/chrome.ts';
 import { syncSchool } from '../../src/sync/index.ts';
 import type { Page } from 'playwright-core';
@@ -110,6 +110,29 @@ test('starting a new login cancels the one still waiting', { timeout: 90_000 }, 
     });
     assert.equal(second.ok, true, second.message);
     assert.equal(getLoginState(school.id).status, 'success');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('daily SSO refresh renews through the identity provider and never harms a working login', { timeout: 150_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha', idp: true });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    assert.equal((await interactiveLogin(db, school.id, { headless: true, onPage: fillLogin, timeoutMs: 60_000 })).ok, true);
+    const session = () => loadAuth(school.id)!.cookies.find((c) => c.name === 'canvas_session')!.value;
+    const before = session();
+    assert.equal(await refreshSso(db, school.id), true);
+    const renewed = session();
+    assert.notEqual(renewed, before, 'went through SSO and got a fresh Canvas session');
+    assert.equal(getSchool(db, school.id)!.renewals, 1);
+
+    mock.setRemember(false);
+    assert.equal(await refreshSso(db, school.id, { timeoutMs: 30_000 }), false);
+    assert.equal(session(), renewed, 'a failed refresh keeps the working session');
+    assert.equal((await syncSchool(db, school.id, { reason: 'test', relogin: null })).mode, 'api');
   } finally {
     await mock.close();
   }

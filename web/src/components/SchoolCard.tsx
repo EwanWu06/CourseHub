@@ -4,6 +4,13 @@ import { fmtRelative } from '../format.ts';
 import type { SchoolView } from '../types.ts';
 import { Badge, ExtLink } from './ui.tsx';
 
+function sinceText(iso: string): string {
+  const h = (Date.now() - Date.parse(iso)) / 3_600_000;
+  if (h < 1) return '不到 1 小时';
+  if (h < 48) return `${Math.floor(h)} 小时`;
+  return `${Math.floor(h / 24)} 天`;
+}
+
 const STATUS: Record<SchoolView['status'], { label: string; tone?: 'ok' | 'warn' | 'bad' }> = {
   ok: { label: '正常', tone: 'ok' },
   needs_login: { label: '需要重新登录', tone: 'bad' },
@@ -55,6 +62,13 @@ export function SchoolCard({ school, onChanged }: { school: SchoolView; onChange
             {school.user_name ? <> · 已登录为 {school.user_name}</> : null}
             {' · '}上次同步 {fmtRelative(school.last_sync_at)}
           </div>
+          {school.auth_mode === 'session' && school.login_at && school.status === 'ok' ? (
+            <div className="small" style={{ marginTop: 3, color: 'var(--moss)' }}>
+              ● 登录已保持 {sinceText(school.login_at)}
+              {school.renewals ? ` · 自动续期 ${school.renewals} 次` : ''}
+              {school.alive_at ? ` · ${fmtRelative(school.alive_at)}确认有效` : ''}
+            </div>
+          ) : null}
         </div>
         <div className="row">
           {school.auth_mode === 'session' ? (
