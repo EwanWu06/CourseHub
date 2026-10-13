@@ -1,7 +1,10 @@
-// macOS notifications. Serialized so banners don't trample each other; tests inject their own notifier.
+// macOS notifications. Delivered through the small "Course Hub" applet (notifier/), so banners carry our name and
+// clicking one opens the page it is about; plain osascript when the applet isn't built. Serialized, ≥2 s apart.
 import { execFile } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
-import { PORT } from '../config.ts';
+import { PORT, ROOT_DIR, paths } from '../config.ts';
 import { log } from '../util/log.ts';
 
 const execFileAsync = promisify(execFile);
@@ -19,17 +22,46 @@ export function appleScriptString(s: string): string {
   return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+export const NOTIFIER_APP = path.join(ROOT_DIR, 'notifier', 'Course Hub.app');
+
+/** What the applet reads: title, subtitle, body and url, one per line. */
+export function pendingText(n: Notice): string {
+  const line = (s: string | undefined) => (s ?? '').replace(/\s*\n\s*/g, ' ').trim();
+  return `${line(n.title)}\n${line(n.subtitle)}\n${line(n.body)}\n${line(n.url)}\n`;
+}
+
+async function viaApplet(n: Notice): Promise<boolean> {
+  // The applet finds data/notify next to itself, so it only serves the default data directory.
+  if (!existsSync(NOTIFIER_APP) || paths().notify !== path.join(ROOT_DIR, 'data', 'notify')) return false;
+  mkdirSync(paths().notify, { recursive: true });
+  const file = path.join(paths().notify, 'pending.txt');
+  writeFileSync(file, pendingText(n));
+  await execFileAsync('/usr/bin/open', ['-g', '-a', NOTIFIER_APP], { timeout: 10_000 });
+  // wait until the applet has taken it, so the next notice can't overwrite this one
+  for (let i = 0; i < 50 && existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));
+  return true;
+}
+
+async function deliver(n: Notice): Promise<void> {
+  try {
+    if (await viaApplet(n)) return;
+  } catch (err) {
+    log('warn', 'notifier applet failed, falling back to osascript', err);
+  }
+  await osascript(n);
+}
+
 async function osascript(n: Notice): Promise<void> {
   const script = `display notification ${appleScriptString(n.body)} with title ${appleScriptString(n.title)}${n.subtitle ? ` subtitle ${appleScriptString(n.subtitle)}` : ''}`;
   await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 10_000 });
 }
 
 export function notify(n: Notice): Promise<void> {
-  const send = override ?? osascript;
+  const send = override ?? deliver;
   chain = chain
     .then(() => send(n))
     .catch((err) => log('warn', 'notification failed', err))
-    .then(() => (override ? undefined : new Promise<void>((r) => setTimeout(r, 1500))));
+    .then(() => (override ? undefined : new Promise<void>((r) => setTimeout(r, 2000))));
   return chain;
 }
 
