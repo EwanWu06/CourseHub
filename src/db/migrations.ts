@@ -293,4 +293,16 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS sync_runs_school ON sync_runs(school_id, id);
   CREATE INDEX IF NOT EXISTS reminders_sent_at ON reminders_sent(sent_at);
   `,
+  // 9: publisher platforms read alongside Canvas (Achieve…): when each course's work was last read, and why not
+  `
+  CREATE TABLE platform_status (
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL,
+    last_try_at TEXT,
+    last_ok_at TEXT,
+    error TEXT,
+    items INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (course_id, platform)
+  );
+  `,
 ];

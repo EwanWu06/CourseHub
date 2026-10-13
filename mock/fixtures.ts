@@ -413,7 +413,8 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
       ],
       quizzes: [], pages: [], files: [], events: [],
       modules: [{ id: '7450', name: 'Achieve eBook', position: 1, unlock_at: null, items: [
-        { id: '7451', title: 'Achieve Assignments Link', type: 'ExternalTool', external_url: 'https://lmslink.bfwpub.com/index.php?custom_action=openItem&custom_resource_id=mwtool_600', position: 1 },
+        { id: '7452', title: 'Achieve E-book Link', type: 'ExternalTool', external_url: 'https://lmslink.bfwpub.com/index.php?custom_action=openItem&custom_resource_id=mwtool_602&custom_template_root=&custom_course_id=3de09d3e-5572-4b21-9c29-76961c25e2bc', position: 1 },
+        { id: '7451', title: 'Achieve Assignments Link', type: 'ExternalTool', external_url: 'https://lmslink.bfwpub.com/index.php?custom_action=openItem&custom_resource_id=mwtool_600&custom_template_root=&custom_course_id=3de09d3e-5572-4b21-9c29-76961c25e2bc', position: 2 },
       ] }],
       topics: [ann('7461', 'First Class Meeting', at(-20, 12, 38))],
     };

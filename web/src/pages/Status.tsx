@@ -117,6 +117,19 @@ export function Status() {
             <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => void testNotice()}>{busy === 'notify' ? '发送中…' : '发一条测试通知'}</button>
           </div>
         </Section>
+        {data.platforms.length ? (
+          <Section num="vi." title="外部平台" note="Canvas 里只有成绩栏的作业平台，直接去平台读">
+            <div className="card card-pad small">
+              {data.platforms.map((p) => (
+                <p key={`${p.courseId}:${p.platform}`}>
+                  <b>{p.platform}</b> · {p.courseName}：{p.ok ? `已读到 ${p.items} 项有截止日期的作业` : `读取失败：${p.error ?? '原因不明'}`}
+                  {p.lastOkAt ? <span className="muted">（上次成功 {fmtRelative(p.lastOkAt, new Date())}）</span> : null}
+                </p>
+              ))}
+              <p className="muted">每次同步时用一个临时的无头浏览器从 Canvas 打开平台，只读作业列表和完成情况，不打开任何作业。</p>
+            </div>
+          </Section>
+        ) : null}
       </div>
     </div>
   );

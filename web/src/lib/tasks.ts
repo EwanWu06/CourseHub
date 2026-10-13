@@ -16,12 +16,13 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 const PROVIDERS: Record<string, string> = {
-  macmillan: 'Macmillan', gradescope: 'Gradescope', pearson: 'Pearson', 'mcgraw-hill': 'McGraw-Hill',
+  macmillan: 'Macmillan', achieve: 'Achieve', gradescope: 'Gradescope', pearson: 'Pearson', 'mcgraw-hill': 'McGraw-Hill',
   zybooks: 'zyBooks', webassign: 'WebAssign', cengage: 'Cengage', external: '外部工具',
 };
 
 export function providerNote(provider: string): string | null {
   if (provider === 'macmillan') return 'Macmillan · 以 Achieve 为准';
+  if (provider === 'achieve') return 'Achieve'; // read from Achieve itself: deadline and completion are Achieve's own
   const name = PROVIDERS[provider];
   return name ? `${name} · 以平台为准` : null;
 }

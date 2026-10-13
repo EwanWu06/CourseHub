@@ -68,7 +68,7 @@ export function categorizeSchool(db: DB, schoolId: string): number {
   const rows = all<{ id: string; title: string; kind: string; submission_types: string | null; group_id: string | null; category: string | null; category_source: string | null }>(db,
     'SELECT id, title, kind, submission_types, group_id, category, category_source FROM items WHERE school_id = $schoolId AND removed = 0', { schoolId });
   for (const r of rows) {
-    if (r.category_source === 'user' || r.category_source === 'syllabus') continue;
+    if (r.category_source === 'user' || r.category_source === 'syllabus' || r.category_source === 'platform') continue;
     let types: string[] = [];
     try {
       types = r.submission_types ? (JSON.parse(r.submission_types) as string[]) : [];

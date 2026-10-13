@@ -61,6 +61,13 @@ export interface Overview {
   announcements: Announcement[];
   latestDaily: { id: string; type: 'daily'; period: string; createdAt: string; headline: string; blocks: { slot: string; title: string; minutes: number }[] } | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];
+  platforms: PlatformView[];
+}
+
+/** A publisher platform (Achieve) whose work is read alongside Canvas for one course. */
+export interface PlatformView {
+  courseId: string; courseName: string; platform: string; ok: boolean; items: number;
+  lastOkAt: string | null; lastTryAt: string | null; error: string | null; url: string;
 }
 
 export interface CourseDetailT {
@@ -157,5 +164,6 @@ export interface SystemStatus {
   ai: { enabled: boolean; model: string; running: string | null; pending: number; today: { calls: number; failed: number; inputTokens: number; outputTokens: number }; last: { ok: boolean; error: string | null; at: string; purpose: string } | null };
   backups: { date: string; bytes: number }[];
   notifier: { applet: boolean; unread: number };
+  platforms: PlatformView[];
   issues: StatusIssue[];
 }

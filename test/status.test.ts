@@ -41,3 +41,14 @@ test('low disk space is an issue before it becomes a crash', () => {
   assert.match(issues[0].text, /1\.5 GB/);
   assert.deepEqual(statusIssues({ now, schools: [], jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: null, diskFreeBytes: 20 * 1024 ** 3 }), []);
 });
+
+test('a platform whose work could not be read is an issue: its deadlines may be missing', () => {
+  const base = { now, schools: [], jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: null };
+  const issues = statusIssues({ ...base, platforms: [{ courseName: 'LIFESCI XL 7A', platform: 'Achieve', lastOkAt: null, lastTryAt: '2026-10-12T19:00:00Z', error: '没有进入 Achieve 课程页' }] });
+  assert.equal(issues[0].kind, 'platform');
+  assert.match(issues[0].text, /LIFESCI XL 7A.*Achieve.*没有进入 Achieve 课程页/);
+  const fine = statusIssues({ ...base, platforms: [{ courseName: 'LIFESCI XL 7A', platform: 'Achieve', lastOkAt: '2026-10-12T19:00:00Z', lastTryAt: '2026-10-12T19:00:00Z', error: null }] });
+  assert.deepEqual(fine, []);
+  const stale = statusIssues({ ...base, platforms: [{ courseName: 'LIFESCI XL 7A', platform: 'Achieve', lastOkAt: '2026-10-11T08:00:00Z', lastTryAt: '2026-10-12T19:00:00Z', error: 'timeout' }] });
+  assert.match(stale[0].text, /36 小时/);
+});

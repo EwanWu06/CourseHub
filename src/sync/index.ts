@@ -20,6 +20,8 @@ import { mergeIcs } from './icsMerge.ts';
 import { syncCourseContent, syncInbox } from './content.ts';
 import { rebuildWeeks } from '../weeks/build.ts';
 import { extractPendingFiles } from '../content/pipeline.ts';
+import { findAchieveLaunch, readAchieveInChrome, syncAchieve } from '../platforms/achieve.ts';
+import type { AchieveReader } from '../platforms/achieve.ts';
 
 export interface SyncOptions {
   schoolId?: string;
@@ -27,6 +29,8 @@ export interface SyncOptions {
   now?: Date;
   relogin?: ((schoolId: string) => Promise<boolean | 'error'>) | null;
   onLoginNeeded?: (school: SchoolRow) => void;
+  /** reads a course's Achieve work (default: headless Chrome); null skips publisher platforms */
+  readAchieve?: AchieveReader | null;
 }
 
 export class SyncBusyError extends Error {
@@ -54,7 +58,7 @@ async function guarded(ctx: SyncContext, label: string, fn: () => Promise<unknow
   }
 }
 
-async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Date, stats: SyncStats): Promise<void> {
+async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Date, stats: SyncStats, opts: SyncOptions): Promise<void> {
   const ctx: SyncContext = {
     db, school, client, now, firstSync: !school.last_ok_at, stats, complete: new Set(),
     quizToAssignment: new Map(), topicToAssignment: new Map(),
@@ -73,6 +77,11 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
     });
     await guarded(ctx, `${course.name} 内容`, () => syncCourseContent(ctx, course));
     await guarded(ctx, `${course.name} 周次`, async () => rebuildWeeks(db, course.id));
+  }
+  // publisher platforms whose work Canvas doesn't hold (Achieve): read after the course itself is current
+  const readAchieve = opts.readAchieve === undefined ? readAchieveInChrome : opts.readAchieve;
+  for (const course of courses.filter((c) => !c.hidden && readAchieve && findAchieveLaunch(db, c.id))) {
+    await guarded(ctx, `${course.name} Achieve`, () => syncAchieve(ctx, course, readAchieve!));
   }
   await guarded(ctx, '日历事件', () => syncCalendarEvents(ctx, courses));
   await guarded(ctx, '待办计划', () => syncPlanner(ctx, courses));
@@ -117,7 +126,7 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
       await icsOnly(db, school, now, stats);
     } else {
       try {
-        await apiSync(db, school, client, now, stats);
+        await apiSync(db, school, client, now, stats, opts);
       } catch (err) {
         if (!(err instanceof SessionExpiredError)) throw err;
         persistClientCookies(schoolId, client);
@@ -127,7 +136,7 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
         if (outcome === true) {
           client = makeClient(getSchool(db, schoolId)!);
           if (!client) throw new Error('重新登录后没有保存登录状态');
-          await apiSync(db, getSchool(db, schoolId)!, client, now, stats);
+          await apiSync(db, getSchool(db, schoolId)!, client, now, stats, opts);
         } else if (outcome === 'error') {
           // the renewal couldn't run (Chrome didn't start…): not a lost login; keep-alive retries soon
           updateSchool(db, schoolId, { status: 'error', status_detail: '登录过期了，自动续期这次没能运行（Chrome 没启动），稍后会自动再试' });

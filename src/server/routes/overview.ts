@@ -13,6 +13,7 @@ import type { AnyReport } from '../../reports/view.ts';
 import type { TaskView } from '../../reports/data.ts';
 import { addDays, atLocal, localDateStr, mondayOf } from '../../util/time.ts';
 import { courseDisplayName } from '../../util/course.ts';
+import { platformViews } from '../../platforms/achieve.ts';
 
 const DAY = 86_400_000;
 const actionable = (t: TaskView) => t.status === 'todo' || t.status === 'overdue' || t.status === 'missing';
@@ -100,6 +101,7 @@ export function registerOverview(app: Hono, db: DB): void {
       week: { open: weekOpen.length, minutes: weekOpen.reduce((n, t) => n + t.estMinutes, 0) },
       study,
       announcements: latestAnnouncements(db, 10),
+      platforms: platformViews(db),
       latestDaily: dailyBrief(db),
       loginNeeded: schools.filter((s) => s.status === 'needs_login').map((s) => ({ id: s.id, name: s.name, statusDetail: s.status_detail })),
     });

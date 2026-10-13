@@ -14,13 +14,14 @@ import { NOTIFIER_APP } from '../../notify/mac.ts';
 import { atLocal, localDateStr } from '../../util/time.ts';
 import { APP_INFO } from '../appinfo.ts';
 import { LOW_DISK_BYTES, diskFreeBytes } from '../../maintenance.ts';
+import { platformViews } from '../../platforms/achieve.ts';
 
 export const JOB_LABELS: Record<string, string> = {
   keepalive: '保持登录', daily: '日报', weekly: '周报', sync: '同步', reminders: '截止提醒', 'report-ai': '补全 AI 安排',
   guides: '学习讲解', 'sso-refresh': '刷新学校登录', backup: '数据库备份', cleanup: '清理',
 };
 
-export interface Issue { kind: 'disk' | 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
+export interface Issue { kind: 'disk' | 'platform' | 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
 
 interface IssueInput {
   now: Date;
@@ -30,11 +31,20 @@ interface IssueInput {
   applet: boolean;
   lastAi: { ok: boolean; error: string | null; at: string } | null;
   diskFreeBytes?: number | null;
+  platforms?: { courseName: string; platform: string; lastOkAt: string | null; lastTryAt: string | null; error: string | null }[];
 }
 
 export function statusIssues(x: IssueInput): Issue[] {
   const out: Issue[] = [];
   const hoursSince = (iso: string) => (x.now.getTime() - Date.parse(iso)) / 3_600_000;
+  for (const p of x.platforms ?? []) {
+    if (!p.error) continue;
+    if (!p.lastOkAt) {
+      out.push({ kind: 'platform', text: `${p.courseName} 的 ${p.platform} 作业还没能读取：${p.error}。在这之前，${p.platform} 上的截止日期请直接去 ${p.platform} 看`, action: 'sync' });
+    } else if (hoursSince(p.lastOkAt) >= 6) {
+      out.push({ kind: 'platform', text: `${p.courseName} 的 ${p.platform} 作业已经 ${Math.round(hoursSince(p.lastOkAt))} 小时没读到了：${p.error}。这期间新增或改动的截止日期可能没有显示`, action: 'sync' });
+    }
+  }
   if (x.diskFreeBytes != null && x.diskFreeBytes < LOW_DISK_BYTES) {
     out.push({ kind: 'disk', text: `这台 Mac 只剩 ${(x.diskFreeBytes / 1024 ** 3).toFixed(1)} GB 空间：太少会让同步、备份和课件读取失败，清理一下磁盘吧` });
   }
@@ -75,6 +85,7 @@ export function buildStatus(db: DB, now: Date = new Date()) {
   const last = one<AiRunRow>(db, 'SELECT * FROM ai_runs ORDER BY id DESC LIMIT 1');
   const backups = listBackups().map(({ date, bytes }) => ({ date, bytes }));
   const disk = diskFreeBytes();
+  const platforms = platformViews(db);
   const applet = existsSync(NOTIFIER_APP);
   const s = getSettings(db);
   const lastAi = last ? { ok: !!last.ok, error: last.error, at: last.started_at, purpose: last.purpose } : null;
@@ -89,7 +100,8 @@ export function buildStatus(db: DB, now: Date = new Date()) {
     backups,
     disk: { freeBytes: disk },
     notifier: { applet, unread: unreadNotices(db) },
-    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk }),
+    platforms,
+    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk, platforms }),
   };
 }
 

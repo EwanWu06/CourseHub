@@ -234,6 +234,13 @@ export function Today() {
               <Link to="/settings" className="btn btn-sm btn-seal right">去登录</Link>
             </div>
           ) : null}
+          {data.platforms.filter((p) => !p.ok).map((p) => (
+            <div key={`${p.courseId}:${p.platform}`} className="callout warn">
+              <b>{p.courseName} 的 {p.platform} 作业{p.lastOkAt ? `暂时没读到（上次成功 ${fmtRelative(p.lastOkAt, now)}）` : '还没能读取'}：</b>{p.error ?? '原因不明'}。
+              这期间请以 {p.platform} 为准。
+              <ExtLink href={p.url} className="btn btn-sm right">打开 {p.platform}</ExtLink>
+            </div>
+          ))}
           <ExamBand exams={data.exams} now={now} />
           <div className="today-cols">
             <Homework tasks={data.homework} now={now} />

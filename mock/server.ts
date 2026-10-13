@@ -294,6 +294,12 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]'))) };
       if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1 })) };
       const hidden = (what: 'pages' | 'quizzes' | 'files') => c.apiHidden?.includes(what);
+      if (rest === '/external_tools/sessionless_launch') {
+        // a one-time launch URL for an LTI tool, as Canvas gives students (and its mobile apps) for module items
+        const item = c.modules.flatMap((mod) => mod.items).find((i) => i.id === q.get('module_item_id') && i.type === 'ExternalTool');
+        if (q.get('launch_type') !== 'module_item' || !item) return { status: 400, body: { errors: [{ message: 'A tool id, tool url, or module item id must be provided' }] } };
+        return { one: { id: '495', name: 'Macmillan Learning Launchpad', url: `${baseUrl}/courses/${c.id}/external_tools/sessionless_launch?verifier=v${item.id}` } };
+      }
       if (rest === '/quizzes' && hidden('quizzes')) return { status: 404, body: { errors: [{ message: 'The specified resource does not exist.' }] } };
       if (rest === '/pages' && hidden('pages')) return { status: 404, body: { errors: [{ message: 'The specified resource does not exist.' }] } };
       if (rest === '/files' && hidden('files')) return { status: 403, body: { status: 'unauthorized', errors: [{ message: 'user not authorized to perform that action' }] } };
