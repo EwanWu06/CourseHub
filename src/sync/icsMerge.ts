@@ -3,19 +3,17 @@
 import type { IcsEvent } from '../canvas/ics.ts';
 import { listCourses } from '../db/courses.ts';
 import { CHECKPOINT_LABEL, getItem, itemToUpsert, upsertItem } from '../db/items.ts';
-import { localDateStr } from '../util/time.ts';
+import { localDateStr, sameDeadline as sameMinute } from '../util/time.ts';
 import type { ItemUpsert } from '../db/items.ts';
 import { noteItemChange } from './changes.ts';
 import type { SyncContext } from './context.ts';
 
 type IcsCtx = Pick<SyncContext, 'db' | 'school' | 'now' | 'firstSync' | 'stats'> & { apiOk: boolean };
 
-const instant = (iso: string | null) => (iso ? Date.parse(iso) : null);
-
 /** Does the feed agree with what we have? An all-day assignment date only says which day it's due. */
 function sameDeadline(ev: IcsEvent, due: string | null): boolean {
   if (ev.allDay && ev.kind === 'assignment') return !!due && localDateStr(new Date(due)) === localDateStr(new Date(ev.start));
-  return instant(due) === instant(ev.start);
+  return sameMinute(due, ev.start);
 }
 
 export async function mergeIcs(ctx: IcsCtx, events: IcsEvent[]): Promise<number> {
@@ -29,7 +27,7 @@ export async function mergeIcs(ctx: IcsCtx, events: IcsEvent[]): Promise<number>
     const existing = getItem(ctx.db, id);
     if (existing) {
       if (ctx.apiOk && existing.source === 'api') continue;
-      if (sameDeadline(ev, existing.due_at) && (ev.kind !== 'event' || instant(existing.end_at) === instant(ev.end))) continue;
+      if (sameDeadline(ev, existing.due_at) && (ev.kind !== 'event' || sameMinute(existing.end_at, ev.end))) continue;
       const next: ItemUpsert = { ...itemToUpsert(existing), due_at: ev.start, end_at: ev.kind === 'event' ? ev.end : existing.end_at };
       upsertItem(ctx.db, next);
       noteItemChange(ctx, existing, next);

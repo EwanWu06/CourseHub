@@ -21,7 +21,7 @@ export const JOB_LABELS: Record<string, string> = {
   guides: '学习讲解', 'sso-refresh': '刷新学校登录', backup: '数据库备份', cleanup: '清理',
 };
 
-export interface Issue { kind: 'disk' | 'platform' | 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
+export interface Issue { kind: 'disk' | 'crosscheck' | 'platform' | 'login' | 'stale' | 'sync-error' | 'job' | 'backup' | 'notifier' | 'ai'; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
 
 interface IssueInput {
   now: Date;
@@ -32,11 +32,19 @@ interface IssueInput {
   lastAi: { ok: boolean; error: string | null; at: string } | null;
   diskFreeBytes?: number | null;
   platforms?: { courseName: string; platform: string; lastOkAt: string | null; lastTryAt: string | null; error: string | null }[];
+  /** per school: problems the after-sync cross-check found in the latest and the previous API sync */
+  crossChecks?: { school: string; latest: string[] | null; previous: string[] | null }[];
 }
 
 export function statusIssues(x: IssueInput): Issue[] {
   const out: Issue[] = [];
   const hoursSince = (iso: string) => (x.now.getTime() - Date.parse(iso)) / 3_600_000;
+  for (const c of x.crossChecks ?? []) {
+    // twice in a row: one sync can catch Canvas mid-change
+    if (!c.latest?.length || !c.previous?.length) continue;
+    const n = c.latest.length;
+    out.push({ kind: 'crosscheck', text: `${c.school} 有 ${n} 处和 Canvas 自己的列表对不上：${c.latest[0]}${n > 1 ? `；另有 ${n - 1} 处，见系统状态` : ''}`, action: 'sync' });
+  }
   for (const p of x.platforms ?? []) {
     if (!p.error) continue;
     if (!p.lastOkAt) {
@@ -67,12 +75,23 @@ export function statusIssues(x: IssueInput): Issue[] {
 
 /** Everything the status page (and `coursehub status` / `doctor`) shows. */
 export function buildStatus(db: DB, now: Date = new Date()) {
+  const crossChecks: NonNullable<IssueInput['crossChecks']> = [];
   const schools = listSchools(db).map((s) => {
-    const run = recentSyncRuns(db, 1, s.id)[0];
+    const runs = recentSyncRuns(db, 2, s.id);
+    const run = runs[0];
+    const checksOf = (r: (typeof runs)[number] | undefined) => {
+      try {
+        return r?.stats ? ((JSON.parse(r.stats) as { checks?: { sources: Record<string, number>; problems: string[] } }).checks ?? null) : null;
+      } catch {
+        return null;
+      }
+    };
+    const checks = checksOf(run);
+    crossChecks.push({ school: s.name, latest: checks?.problems ?? null, previous: checksOf(runs[1])?.problems ?? null });
     return {
       id: s.id, name: s.name, color: s.color, status: s.status, statusDetail: s.status_detail, authMode: s.auth_mode,
       loginAt: s.login_at, aliveAt: s.alive_at, renewals: s.renewals, lastSyncAt: s.last_sync_at, lastOkAt: s.last_ok_at,
-      icsFallback: !!s.ics_url, lastRun: run ? { status: run.status, error: run.error, finishedAt: run.finished_at } : null,
+      icsFallback: !!s.ics_url, lastRun: run ? { status: run.status, error: run.error, finishedAt: run.finished_at } : null, checks,
     };
   });
   const jobs = Object.entries(JOB_LABELS).map(([name, label]) => {
@@ -101,7 +120,7 @@ export function buildStatus(db: DB, now: Date = new Date()) {
     disk: { freeBytes: disk },
     notifier: { applet, unread: unreadNotices(db) },
     platforms,
-    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk, platforms }),
+    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi, diskFreeBytes: disk, platforms, crossChecks }),
   };
 }
 

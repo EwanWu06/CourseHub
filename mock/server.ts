@@ -257,6 +257,24 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     }
     if (path === '/api/v1/courses') return { list: data.courses.map((c) => courseJson(c, q)) };
     if (path === '/api/v1/planner/items') return { list: plannerItems(q) };
+    if (path === '/api/v1/users/self/todo') {
+      // Canvas's "To Do": unsubmitted work that is due (or open) now, checkpoints by their sub-assignment id
+      const out: unknown[] = [];
+      for (const c of data.courses.filter((x) => !x.restricted)) {
+        for (const a of c.assignments) {
+          const base = { type: 'submitting', context_type: 'Course', course_id: c.id, context_name: c.name };
+          if (a.checkpoints?.length) {
+            for (const cp of a.checkpoints.filter((x) => !x.submitted_at && Date.parse(x.due_at) > Date.now())) {
+              const sid = cp.sub_id ?? `${a.id}${cp.tag === 'reply_to_topic' ? 1 : 2}`;
+              out.push({ ...base, ignore: `${baseUrl}/api/v1/users/self/todo/sub_assignment_${sid}/submitting?permanent=0`, assignment: { id: sid, name: a.name, due_at: cp.due_at } });
+            }
+          } else if (a.due_at && Date.parse(a.due_at) > Date.now() && a.submission.workflow_state === 'unsubmitted' && !a.submission_types.every((t) => ['none', 'on_paper', 'not_graded'].includes(t))) {
+            out.push({ ...base, ignore: `${baseUrl}/api/v1/users/self/todo/assignment_${a.id}/submitting?permanent=0`, assignment: { id: a.id, name: a.name, due_at: a.due_at } });
+          }
+        }
+      }
+      return { one: out };
+    }
     if (path === '/api/v1/users/self/missing_submissions') {
       return { list: data.courses.flatMap((c) => c.assignments.filter((a) => a.submission.missing).map((a) => assignmentJson(c, a, []))) };
     }

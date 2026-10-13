@@ -159,7 +159,7 @@ export interface ReportDetail { id: string; type: 'daily' | 'weekly'; period: st
 export interface StatusIssue { kind: string; text: string; action?: 'login' | 'sync' | 'backup' | 'notify-test' }
 export interface SystemStatus {
   app: { app: string; version: string; pid: number; startedAt: string };
-  schools: { id: string; name: string; color: string; status: SchoolView['status']; statusDetail: string | null; authMode: string; loginAt: string | null; aliveAt: string | null; renewals: number; lastSyncAt: string | null; lastOkAt: string | null; icsFallback: boolean; lastRun: { status: string; error: string | null; finishedAt: string | null } | null }[];
+  schools: { id: string; name: string; color: string; status: SchoolView['status']; statusDetail: string | null; authMode: string; loginAt: string | null; aliveAt: string | null; renewals: number; lastSyncAt: string | null; lastOkAt: string | null; icsFallback: boolean; lastRun: { status: string; error: string | null; finishedAt: string | null } | null; checks: { sources: { planner: number; ics: number; todo: number; missing: number }; problems: string[] } | null }[];
   jobs: { name: string; label: string; lastRunAt: string | null; lastStatus: string | null; lastError: string | null }[];
   ai: { enabled: boolean; model: string; running: string | null; pending: number; today: { calls: number; failed: number; inputTokens: number; outputTokens: number }; last: { ok: boolean; error: string | null; at: string; purpose: string } | null };
   backups: { date: string; bytes: number }[];

@@ -532,6 +532,7 @@
   .issue-list .new-dot { margin-top: 0; }
   .status-row { align-items: flex-start; }
   .status-row .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; margin-top: 6px; }
+  .status-row .check-problems { color: var(--amber); }
   .status-name { min-width: 7.5em; font-weight: 600; }
   .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 16px; }
   .status-grid .card p { margin: 0 0 8px; line-height: 1.6; }

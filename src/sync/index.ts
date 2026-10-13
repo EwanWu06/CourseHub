@@ -17,6 +17,8 @@ import { syncCourses } from './courses.ts';
 import { markCourseRemovals, syncAssignmentGroups, syncAssignments, syncCalendarEvents, syncMissing, syncPlanner, syncQuizzes } from './items.ts';
 import { categorizeSchool } from './category.ts';
 import { mergeIcs } from './icsMerge.ts';
+import { crossCheck } from './crosscheck.ts';
+import type { CanvasTodo } from './crosscheck.ts';
 import { syncCourseContent, syncInbox } from './content.ts';
 import { rebuildWeeks } from '../weeks/build.ts';
 import { extractPendingFiles } from '../content/pipeline.ts';
@@ -61,7 +63,7 @@ async function guarded(ctx: SyncContext, label: string, fn: () => Promise<unknow
 async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Date, stats: SyncStats, opts: SyncOptions): Promise<void> {
   const ctx: SyncContext = {
     db, school, client, now, firstSync: !school.last_ok_at, stats, complete: new Set(),
-    quizToAssignment: new Map(), topicToAssignment: new Map(),
+    quizToAssignment: new Map(), topicToAssignment: new Map(), evidence: {},
   };
   const profile = await client.get<CanvasProfile>('/api/v1/users/self/profile');
   updateSchool(db, school.id, { user_name: profile.name ?? school.user_name, ics_url: profile.calendar?.ics ?? school.ics_url });
@@ -90,9 +92,19 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
   await guarded(ctx, '提取文字', () => extractPendingFiles(ctx));
 
   const icsUrl = getSchool(db, school.id)?.ics_url;
-  if (icsUrl) await guarded(ctx, '日历订阅', async () => mergeIcs({ ...ctx, apiOk: true }, await fetchIcs(icsUrl)));
+  if (icsUrl) {
+    await guarded(ctx, '日历订阅', async () => {
+      const events = await fetchIcs(icsUrl);
+      ctx.evidence!.ics = events;
+      await mergeIcs({ ...ctx, apiOk: true }, events);
+    });
+  }
+  await guarded(ctx, 'To Do 列表', async () => {
+    ctx.evidence!.todo = await client.get<CanvasTodo[]>('/api/v1/users/self/todo');
+  });
 
   categorizeSchool(db, school.id);
+  stats.checks = crossCheck(db, getSchool(db, school.id)!, now, ctx.evidence!);
   stats.mode = 'api';
   updateSchool(db, school.id, { status: 'ok', status_detail: null, last_sync_at: now.toISOString(), last_ok_at: now.toISOString() });
 }

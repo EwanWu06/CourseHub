@@ -70,6 +70,16 @@ export function Status() {
                   {s.authMode === 'token' ? '用访问令牌' : <>登录于 {fmtRelative(s.loginAt)} · 最近确认 {fmtRelative(s.aliveAt)}{s.renewals ? ` · 已自动续期 ${s.renewals} 次` : ''}</>}
                   {' · '}上次同步成功 {fmtRelative(s.lastOkAt)}{s.icsFallback ? ' · 有日历订阅兜底' : ''}
                   {s.statusDetail ? <span className="block">{s.statusDetail}</span> : null}
+                  {s.checks ? (
+                    s.checks.problems.length === 0 ? (
+                      <span className="block">核对：和 Canvas 待办（{s.checks.sources.planner}）、日历订阅（{s.checks.sources.ics}）、To Do（{s.checks.sources.todo}）、缺交列表（{s.checks.sources.missing}）逐条比对，全部一致 ✓</span>
+                    ) : (
+                      <span className="block check-problems">
+                        核对发现 {s.checks.problems.length} 处不一致：
+                        {s.checks.problems.map((p, i) => <span key={i} className="block">· {p}</span>)}
+                      </span>
+                    )
+                  ) : null}
                 </span>
               </div>
             );

@@ -64,3 +64,9 @@ export function describeDue(iso: string | null, now: Date, opts: { dateOnly?: bo
   const md = `${d.getMonth() + 1}月${d.getDate()}日`;
   return `${d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`} ${weekdayZh(day)}${time}`;
 }
+
+/** Two deadlines are the same when they fall in the same minute (feeds carry seconds, APIs sometimes milliseconds). */
+export function sameDeadline(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return Math.abs(Date.parse(a) - Date.parse(b)) < 60_000;
+}

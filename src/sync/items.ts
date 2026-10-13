@@ -173,6 +173,7 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
   const items = await ctx.client.getAll<CanvasPlannerItem>('/api/v1/planner/items', {
     start_date: new Date(from).toISOString(), end_date: new Date(to).toISOString(),
   });
+  if (ctx.evidence) ctx.evidence.planner = items;
   const seen = new Set<string>();
   for (const p of items) {
     const course = p.course_id ? byCanvas.get(String(p.course_id)) : undefined;
@@ -258,5 +259,6 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
 
 export async function syncMissing(ctx: SyncContext): Promise<void> {
   const missing = await ctx.client.getAll<CanvasAssignment>('/api/v1/users/self/missing_submissions', { 'filter[]': ['submittable'] });
+  if (ctx.evidence) ctx.evidence.missing = missing;
   for (const a of missing) setItemFlags(ctx.db, `${ctx.school.id}:a:${a.id}`, { missing: 1 });
 }

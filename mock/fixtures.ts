@@ -47,7 +47,7 @@ export interface MockCourse {
   pages: MockPage[]; files: MockFile[]; topics: MockTopic[]; events: MockEvent[];
 }
 export interface MockPlannerExtra {
-  type: 'planner_note' | 'wiki_page' | 'assessment_request'; id: string; course_id: string | null; title: string; todo_date: string; page_url?: string;
+  type: 'planner_note' | 'wiki_page' | 'assessment_request' | (string & {}); id: string; course_id: string | null; title: string; todo_date: string; page_url?: string;
   assignment_id?: string; workflow_state?: 'assigned' | 'completed';
 }
 export interface MockConversation {
