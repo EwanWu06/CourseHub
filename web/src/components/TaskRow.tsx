@@ -47,6 +47,24 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
   const seal = done ? null : sealFor(task, now);
   const countdown = done || isEvent ? null : fmtCountdown(task.dueAt, now);
   const note = providerNote(task.provider);
+  const [userNote, setUserNote] = useState(task.note);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  useEffect(() => setUserNote(task.note), [task.note]);
+
+  const saveNote = async () => {
+    const value = draft.trim();
+    setEditing(false);
+    if (value === (userNote ?? '')) return;
+    const previous = userNote;
+    setUserNote(value || null);
+    try {
+      await api(`/api/items/${encodeURIComponent(task.id)}`, { method: 'PATCH', body: { note: value } });
+      refreshAll();
+    } catch {
+      setUserNote(previous);
+    }
+  };
 
   const toggle = async () => {
     const next = !localDone;
@@ -79,8 +97,19 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
           {task.points ? <span className="mono">{task.points} 分</span> : null}
           {note ? <span className="provider">{note}</span> : null}
           {task.source === 'ics' ? <span title="登录过期期间来自日历订阅，提交状态未知">日历订阅</span> : null}
+          {!userNote && !editing ? <button type="button" className="add-note" onClick={() => { setDraft(''); setEditing(true); }}>＋备注</button> : null}
         </div>
         {task.syllabusNote ? <div className="syllabus-note">📅 {task.syllabusNote}</div> : null}
+        {editing ? (
+          <input className="note-input" autoFocus value={draft} maxLength={300} placeholder="写一句备注，比如：带计算器 / 要打印出来交" aria-label="备注"
+            onChange={(e) => setDraft(e.target.value)} onBlur={() => void saveNote()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void saveNote();
+              if (e.key === 'Escape') setEditing(false);
+            }} />
+        ) : userNote ? (
+          <button type="button" className="user-note" title="点击修改备注（清空即删除）" onClick={() => { setDraft(userNote); setEditing(true); }}>✎ {userNote}</button>
+        ) : null}
       </div>
       <div className="task-side">
         <div className="due-box">

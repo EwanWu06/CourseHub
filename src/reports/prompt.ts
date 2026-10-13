@@ -23,6 +23,7 @@ export function compactTask(t: TaskView, now: Date): Record<string, unknown> {
     item_id: t.id, course: t.courseName, title: t.title, type: typeLabel(t),
     due: describeDue(t.dueAt, now, { dateOnly: t.dueDateOnly }), minutes: t.estMinutes,
     ...(t.points !== null ? { points: t.points } : {}), ...(STATUS_ZH[t.status] ? { status: STATUS_ZH[t.status] } : {}),
+    ...(t.note ? { note: t.note } : {}),
   };
 }
 

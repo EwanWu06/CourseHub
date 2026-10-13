@@ -26,6 +26,7 @@ export interface ItemRow {
   first_seen_at: string; updated_at: string; removed: number;
   group_id: string | null; category: string | null; category_source: string | null;
   syllabus_date: string | null; syllabus_note: string | null; syllabus_time_known: number;
+  user_note: string | null;
 }
 
 export interface AssignmentGroupRow { id: string; course_id: string; name: string; weight: number | null; position: number }

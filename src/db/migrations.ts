@@ -262,4 +262,8 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX notices_created ON notices(created_at);
   `,
+  // 6: a personal note on any task ("带计算器"), never touched by syncs
+  `
+  ALTER TABLE items ADD COLUMN user_note TEXT;
+  `,
 ];

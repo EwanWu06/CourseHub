@@ -13,7 +13,7 @@ function row(p: Partial<ItemRow>): ItemRow {
     lock_at: null, points: 10, html_url: null, provider: 'canvas', description_html: null, submission_types: '["online_upload"]',
     sub_state: 'unsubmitted', submitted_at: null, missing: 0, late: 0, excused: 0, score: null, grade: null, canvas_done: 0,
     local_done: 0, source: 'api', module_id: null, first_seen_at: '', updated_at: '', removed: 0,
-    group_id: null, category: null, category_source: null, syllabus_date: null, syllabus_note: null, syllabus_time_known: 0, ...p,
+    group_id: null, category: null, category_source: null, syllabus_date: null, syllabus_note: null, syllabus_time_known: 0, user_note: null, ...p,
   };
 }
 

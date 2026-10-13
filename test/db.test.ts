@@ -5,7 +5,7 @@ import { openDb, tx } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool, listSchools, getSchool, updateSchool, deleteSchool, normalizeBaseUrl } from '../src/db/schools.ts';
 import { upsertCourse, getCourse, listCourses, updateCourseUser, markInactive } from '../src/db/courses.ts';
-import { upsertItem, getItem, listItems, listUndated, setLocalDone, createManual, deleteManual, markRemovedExcept } from '../src/db/items.ts';
+import { upsertItem, getItem, listItems, listUndated, setLocalDone, createManual, deleteManual, markRemovedExcept, setItemNote } from '../src/db/items.ts';
 import type { ItemUpsert } from '../src/db/items.ts';
 import { upsertPage, getPage, upsertFile, getFile, filesNeedingText, setFileText, upsertTopic } from '../src/db/content.ts';
 import { replaceWeeks, listWeeks, upsertGuide, getGuide } from '../src/db/study.ts';
@@ -271,4 +271,15 @@ test('tx rolls back on error', () => {
     throw new Error('boom');
   }));
   assert.equal(listSchools(db).length, 0);
+});
+
+test('a personal note on a task survives re-syncs', () => {
+  const db = freshDb();
+  const { school, courseId } = seedCourse(db);
+  upsertItem(db, item(courseId, school.id, 'x:1'));
+  setItemNote(db, 'x:1', '带计算器');
+  upsertItem(db, item(courseId, school.id, 'x:1', { title: 'HW 1 (updated)' }));
+  assert.equal(getItem(db, 'x:1')!.user_note, '带计算器');
+  setItemNote(db, 'x:1', null);
+  assert.equal(getItem(db, 'x:1')!.user_note, null);
 });

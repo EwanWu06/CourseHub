@@ -6,7 +6,7 @@ import { all, insertRow, one, pick, placeholders, run, updateRow } from './sql.t
 import { getCourse } from './courses.ts';
 
 /** What a sync writes. Category and syllabus fields are owned by the classifier / syllabus pass / user. */
-export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note' | 'syllabus_time_known'>;
+export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note' | 'syllabus_time_known' | 'user_note'>;
 
 const COLS = ['id', 'school_id', 'course_id', 'kind', 'title', 'due_at', 'end_at', 'unlock_at', 'lock_at', 'points',
   'html_url', 'provider', 'description_html', 'submission_types', 'sub_state', 'submitted_at', 'missing', 'late',
@@ -107,7 +107,7 @@ export function setItemFlags(db: DB, id: string, patch: { missing?: number; canv
 }
 
 export function itemToUpsert(row: ItemRow): ItemUpsert {
-  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, category: _c, category_source: _cs, syllabus_date: _sd, syllabus_note: _sn, syllabus_time_known: _st, ...rest } = row;
+  const { first_seen_at: _f, updated_at: _u, local_done: _l, removed: _r, category: _c, category_source: _cs, syllabus_date: _sd, syllabus_note: _sn, syllabus_time_known: _st, user_note: _un, ...rest } = row;
   return rest;
 }
 
@@ -133,4 +133,8 @@ export function upsertSyllabusExam(db: DB, row: { id: string; school_id: string;
     });
   }
   updateRow(db, 'items', { title: row.title, removed: 0, html_url: row.html_url, syllabus_date: row.date, syllabus_note: row.note, syllabus_time_known: row.timeKnown ? 1 : 0, updated_at: now }, 'id = $__id', { __id: row.id });
+}
+
+export function setItemNote(db: DB, id: string, note: string | null): void {
+  run(db, 'UPDATE items SET user_note = $note WHERE id = $id', { id, note });
 }

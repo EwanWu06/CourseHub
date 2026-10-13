@@ -315,6 +315,14 @@ test('search finds tasks, courses, files, pages and announcements; wildcards are
   assert.deepEqual((await json(await call('/api/search?q=%20%20'))).groups, []);
 });
 
+test('a note can be put on any task and shows in its view', async () => {
+  const id = encodeURIComponent('alpha:a:5002');
+  const t = await json(await call(`/api/items/${id}`, { method: 'PATCH', body: { note: '  带计算器  ' } }));
+  assert.equal(t.note, '带计算器');
+  assert.equal((await json(await call(`/api/items/${id}`, { method: 'PATCH', body: { note: '' } }))).note, null);
+  assert.equal((await call(`/api/items/${id}`, { method: 'PATCH', body: { note: 'x'.repeat(301) } })).status, 400);
+});
+
 test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

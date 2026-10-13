@@ -8,7 +8,7 @@ import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool } from '../src/db/schools.ts';
 import { upsertCourse } from '../src/db/courses.ts';
-import { upsertItem, setLocalDone, setItemCategory } from '../src/db/items.ts';
+import { upsertItem, setLocalDone, setItemCategory, setItemNote } from '../src/db/items.ts';
 import type { ItemUpsert } from '../src/db/items.ts';
 import { updateSettings } from '../src/db/settings.ts';
 import { setNotifier } from '../src/notify/mac.ts';
@@ -175,4 +175,11 @@ test('reports made with AI switched off are not retried', async () => {
   updateSettings(db, { aiEnabled: true });
   assert.equal(await fillMissingAi(db, new Date(NOW.getTime() + 120 * 60_000)), 0);
   assert.equal(calls(), 0);
+});
+
+test('the AI plan sees the notes written on tasks', async () => {
+  setItemNote(db, 'tonight', '要打印出来交');
+  reply(1, { headline: 'x', blocks: [], tips: [] });
+  await generateDaily(db, { now: NOW, notify: false });
+  assert.match(readFileSync(path.join(rec, 'stdin-0.txt'), 'utf8'), /"note":"要打印出来交"/);
 });

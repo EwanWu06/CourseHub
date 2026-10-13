@@ -20,7 +20,7 @@ export interface TaskView {
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
-  dueFromSyllabus: boolean; dueDateOnly: boolean;
+  dueFromSyllabus: boolean; dueDateOnly: boolean; note: string | null;
 }
 
 const DONE_STATES = new Set(['submitted', 'graded', 'pending_review']);
@@ -85,6 +85,7 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
       points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
       category: row.category ?? null, categorySource: row.category_source ?? null, syllabusNote: row.syllabus_note ?? null,
       dueFromSyllabus: !row.due_at && !!row.syllabus_date, dueDateOnly: !row.due_at && !!row.syllabus_date && !row.syllabus_time_known,
+      note: row.user_note ?? null,
     };
   };
 }

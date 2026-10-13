@@ -569,6 +569,14 @@
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 }
 
+@layer components {
+  .add-note { border: 0; background: transparent; padding: 0 2px; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .task:hover .add-note, .add-note:focus-visible { opacity: 1; }
+  @media (hover: none) { .add-note { opacity: .7; } }
+  .user-note { display: block; margin-top: 4px; padding: 2px 8px; border: 0; border-left: 2px solid var(--amber); border-radius: 0 6px 6px 0; background: color-mix(in oklab, var(--amber) 9%, transparent); font: inherit; font-size: 13px; color: var(--ink-2); text-align: left; cursor: text; }
+  .note-input { display: block; width: 100%; margin-top: 4px; padding: 4px 8px; border: 1px solid var(--amber); border-radius: 6px; background: var(--card); font: inherit; font-size: 13px; color: var(--ink); outline: none; }
+}
+
 @layer utilities {
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .nowrap { white-space: nowrap; }

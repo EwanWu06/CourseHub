@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import type { DB } from '../../db/index.ts';
-import { createManual, deleteManual, getItem, listItems, listUndated, setItemCategory, setLocalDone } from '../../db/items.ts';
+import { createManual, deleteManual, getItem, listItems, listUndated, setItemCategory, setItemNote, setLocalDone } from '../../db/items.ts';
 import { CATEGORIES, categorizeSchool } from '../../sync/category.ts';
 import type { Category } from '../../sync/category.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
@@ -44,8 +44,13 @@ export function registerItems(app: Hono, db: DB): void {
   app.patch('/api/items/:id', async (c) => {
     const id = c.req.param('id');
     if (!getItem(db, id)) throw new HttpError(404, '任务不存在');
-    const body = await readJson<{ localDone?: boolean; category?: string | null }>(c);
+    const body = await readJson<{ localDone?: boolean; category?: string | null; note?: string | null }>(c);
     if (typeof body.localDone === 'boolean') setLocalDone(db, id, body.localDone);
+    if ('note' in body) {
+      const note = (body.note ?? '').trim();
+      if (note.length > 300) throw new HttpError(400, '备注最多 300 个字');
+      setItemNote(db, id, note || null);
+    }
     if ('category' in body) {
       if (body.category === null) {
         const item = getItem(db, id)!;

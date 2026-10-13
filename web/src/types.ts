@@ -8,6 +8,7 @@ export interface TaskView {
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
   dueFromSyllabus: boolean; dueDateOnly: boolean;
+  note: string | null;
 }
 
 export interface LoginState { status: 'idle' | 'waiting' | 'success' | 'failed'; message: string; startedAt: string | null }
