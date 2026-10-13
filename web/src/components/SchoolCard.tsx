@@ -58,7 +58,7 @@ export function SchoolCard({ school, onChanged }: { school: SchoolView; onChange
         </div>
         <div className="row">
           {school.auth_mode === 'session' ? (
-            <button type="button" className={`btn ${needsLogin ? 'btn-seal' : ''}`} disabled={waiting || busy !== null}
+            <button type="button" className={`btn ${needsLogin ? 'btn-seal' : ''}`} disabled={waiting || busy === 'login'}
               onClick={() => run('login', () => api(`/api/schools/${school.id}/login`, { method: 'POST' }))}>
               {waiting ? <span className="spinner" /> : null}
               {waiting ? '等待登录…' : school.hasAuth ? '重新登录' : '登录'}
@@ -72,7 +72,12 @@ export function SchoolCard({ school, onChanged }: { school: SchoolView; onChange
         </div>
       </div>
 
-      {waiting ? <div className="callout info" style={{ marginTop: 14 }}>🪟 {login.message}</div> : null}
+      {waiting ? (
+        <div className="callout info" style={{ marginTop: 14, alignItems: 'center' }}>
+          <span className="grow">🪟 {login.message}</span>
+          <button type="button" className="btn btn-sm" onClick={() => run('login', () => api(`/api/schools/${school.id}/login`, { method: 'POST' }))}>没看到窗口？重新打开</button>
+        </div>
+      ) : null}
       {login.status === 'failed' ? <div className="callout bad" style={{ marginTop: 14 }}>{login.message}</div> : null}
       {login.status === 'success' && school.status === 'ok' ? <div className="callout ok" style={{ marginTop: 14 }}>✓ {login.message}，正在同步数据…</div> : null}
       {school.status !== 'ok' && school.status_detail ? <div className="callout bad" style={{ marginTop: 14 }}>{school.status_detail}</div> : null}

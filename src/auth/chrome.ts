@@ -78,7 +78,14 @@ export async function launchChrome(opts: { url: string; headless: boolean; profi
     proc.kill('SIGKILL');
     throw new Error(processGone ? 'Chrome 启动后立即退出（可能已有同一配置的 Chrome 在运行）' : 'Chrome 启动超时');
   }
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+  let browser: Browser;
+  try {
+    // Generous timeout: on a busy 8GB Mac attaching to a fresh Chrome can take a while.
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 60_000 });
+  } catch (err) {
+    proc.kill('SIGKILL'); // never leave an orphaned Chrome behind
+    throw err;
+  }
   const context = browser.contexts()[0];
   const userAgent = (opts.userAgent ?? version['User-Agent']).replace('HeadlessChrome', 'Chrome');
 

@@ -71,7 +71,7 @@ export function Deadlines() {
         </select>
         <select className="select" value={course} onChange={(e) => setCourse(e.target.value)} aria-label="课程">
           <option value="">全部课程</option>
-          {courseOptions.map((c) => <option key={c.course.id} value={c.course.id}>{c.course.nickname || c.course.code || c.course.name}</option>)}
+          {courseOptions.map((c) => <option key={c.course.id} value={c.course.id}>{c.course.display_name}</option>)}
         </select>
         <select className="select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="类型">
           {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}

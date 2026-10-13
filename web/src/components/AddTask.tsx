@@ -48,7 +48,7 @@ export function AddTask({ open, onClose, courses }: { open: boolean; onClose: ()
         <label className="field"><span>课程（可选）</span>
           <select className="select" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             <option value="">不属于某门课</option>
-            {courses.map((c) => <option key={c.course.id} value={c.course.id}>{c.course.nickname || c.course.code || c.course.name} · {c.school?.name}</option>)}
+            {courses.map((c) => <option key={c.course.id} value={c.course.id}>{c.course.display_name} · {c.school?.name}</option>)}
           </select>
         </label>
         <div className="row">

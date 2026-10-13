@@ -10,10 +10,13 @@ import { extractFile, isExtractable, UnsupportedFileError } from './extract.ts';
 import { saveText } from './textstore.ts';
 
 export async function extractPendingFiles(ctx: SyncContext, opts: { limit?: number } = {}): Promise<number> {
-  const limit = opts.limit ?? 15;
+  const limit = opts.limit ?? (ctx.firstSync ? 40 : 20);
   const prefix = `${ctx.school.id}:f:`;
   let processed = 0;
-  for (const f of filesNeedingText(ctx.db, 500).filter((x) => x.id.startsWith(prefix))) {
+  const pending = filesNeedingText(ctx.db, 500).filter((x) => x.id.startsWith(prefix));
+  // Files waiting for their unlock date go last so new material is read first.
+  pending.sort((a, b) => Number(!!a.text_error) - Number(!!b.text_error));
+  for (const f of pending) {
     if (!isExtractable(f.name, f.content_type)) {
       setFileText(ctx.db, f.id, { status: 'unsupported' });
       continue;
@@ -26,7 +29,11 @@ export async function extractPendingFiles(ctx: SyncContext, opts: { limit?: numb
     processed++;
     try {
       const meta = await ctx.client.get<CanvasFile>(`/api/v1/files/${f.canvas_id}`);
-      if (!meta.url) throw new Error('没有下载链接（文件可能被锁定）');
+      if (!meta.url || meta.locked_for_user) {
+        // Not released yet (module locked until a date): try again on a later sync.
+        setFileText(ctx.db, f.id, { status: 'pending', error: '文件暂未开放，开放后会自动读取' });
+        continue;
+      }
       const result = await withTempDownload(ctx.client, meta.url, f.name, (p) => extractFile(p, f.name, f.content_type));
       const hasText = result.pages.some((p) => p.trim());
       saveText({

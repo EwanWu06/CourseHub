@@ -108,6 +108,22 @@ test('sync extracts slide text transiently and records per-file status', async (
   }
 });
 
+test('locked files stay pending until the teacher opens them', async () => {
+  const { db, mock, s } = await syncAlpha((m) => {
+    m.data.courses[0].files.push({ id: '7009', display_name: 'Week9_Locked.pdf', content_type: 'application/pdf', updated_at: new Date().toISOString(), bytes: makePdf(['Locked week']), size: 800, locked: true });
+  });
+  try {
+    const f = getFile(db, `${s}:f:7009`)!;
+    assert.equal(f.text_status, 'pending');
+    assert.match(f.text_error!, /暂未开放/);
+    mock.data.courses[0].files.find((x) => x.id === '7009')!.locked = false;
+    await syncSchool(db, s, { reason: 'test', relogin: null });
+    assert.equal(getFile(db, `${s}:f:7009`)!.text_status, 'ok');
+  } finally {
+    await mock.close();
+  }
+});
+
 test('extracted files are not re-downloaded on the next sync', async () => {
   const { db, mock, s } = await syncAlpha();
   try {

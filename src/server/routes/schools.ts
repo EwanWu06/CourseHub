@@ -105,7 +105,7 @@ export function registerSchools(app: Hono, db: DB, deps: { startLogin?: typeof i
 
   app.post('/api/schools/:id/login', (c) => {
     const school = requireSchool(c.req.param('id'));
-    if (getLoginState(school.id).status === 'waiting') throw new HttpError(409, '登录窗口已经打开了');
+    // Clicking again while a login is waiting replaces it (e.g. the window was closed or hidden).
     void (async () => {
       const res = await startLogin(db, school.id);
       if (res.ok) deps.startSync({ schoolId: school.id, reason: 'after-login' });

@@ -14,6 +14,14 @@ import { loadAuth, saveAuth } from './store.ts';
 export interface LoginState { status: 'idle' | 'waiting' | 'success' | 'failed'; message: string; startedAt: string | null }
 
 const states = new Map<string, LoginState>();
+const cancels = new Map<string, () => void>();
+
+/** Stops a login that is still waiting (its Chrome window is closed); returns whether one was running. */
+export function cancelLogin(schoolId: string): boolean {
+  const cancel = cancels.get(schoolId);
+  cancel?.();
+  return !!cancel;
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function getLoginState(schoolId: string): LoginState {
@@ -60,15 +68,27 @@ async function saveSession(db: DB, schoolId: string, context: BrowserContext, us
 export async function interactiveLogin(db: DB, schoolId: string, opts: { timeoutMs?: number; headless?: boolean; onPage?: (page: Page) => Promise<void> } = {}): Promise<{ ok: boolean; message: string }> {
   const school = getSchool(db, schoolId);
   if (!school) return { ok: false, message: '学校不存在' };
-  states.set(schoolId, { status: 'waiting', message: '已在 Chrome 打开登录窗口，请完成登录（SSO / Duo 照常）…', startedAt: new Date().toISOString() });
+  cancelLogin(schoolId); // a newer click replaces an attempt that is still waiting
+  let cancelled = false;
+  const cancel = () => {
+    cancelled = true;
+  };
+  cancels.set(schoolId, cancel);
+  states.set(schoolId, { status: 'waiting', message: '正在打开 Chrome 登录窗口…', startedAt: new Date().toISOString() });
   const finish = (ok: boolean, message: string) => {
-    setState(schoolId, { status: ok ? 'success' : 'failed', message });
+    if (cancels.get(schoolId) === cancel) {
+      cancels.delete(schoolId);
+      setState(schoolId, { status: ok ? 'success' : 'failed', message });
+    }
     return { ok, message };
   };
   try {
     return await withChromeLock(async () => {
+      if (cancelled) return finish(false, '已取消');
       const session = await launchChrome({ url: `${school.base_url}/login`, headless: opts.headless ?? false });
+      if (cancels.get(schoolId) === cancel) setState(schoolId, { status: 'waiting', message: '已在 Chrome 打开登录窗口，请完成登录（SSO / Duo 照常）…' });
       let closed = false;
+      let sawPage = session.context.pages().length > 0;
       void session.exited.then(() => {
         closed = true;
       });
@@ -84,7 +104,11 @@ export async function interactiveLogin(db: DB, schoolId: string, opts: { timeout
             await saveSession(db, schoolId, session.context, session.userAgent, me.name);
             return finish(true, `已登录${me.name ? `：${me.name}` : ''}`);
           }
-          if (closed) return finish(false, '登录窗口被关闭了，请重新点「登录」');
+          if (cancelled) return finish(false, '已取消（重新打开了登录窗口）');
+          // On macOS closing the window doesn't quit Chrome, so "no pages left" also means the user gave up.
+          const open = session.context.pages().length;
+          if (open > 0) sawPage = true;
+          if (closed || (sawPage && open === 0)) return finish(false, '登录窗口被关闭了，请重新点「登录」');
           await sleep(2000);
         }
         return finish(false, '等待登录超时，请重新点「登录」');

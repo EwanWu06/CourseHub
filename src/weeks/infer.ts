@@ -1,6 +1,6 @@
 // Pure week logic: week 1 starts on the Monday of the course (or term) start; modules are mapped to
 // weeks by their name, then unlock date, then the due dates of what they contain.
-import { daysBetween, localDateStr, mondayOf } from '../util/time.ts';
+import { addDays, daysBetween, localDateStr, mondayOf } from '../util/time.ts';
 
 const MAX_WEEK = 30;
 
@@ -22,8 +22,15 @@ export function parseWeekRange(name: string): { start: number; end: number } | n
 }
 
 export function inferWeek1(i: { courseStart: string | null; termStart: string | null; dates: string[] }): string | null {
-  const start = i.courseStart ?? i.termStart ?? [...i.dates].sort()[0] ?? null;
-  return start ? mondayOf(start) : null;
+  const official = i.courseStart ?? i.termStart;
+  if (official) {
+    // Courses that officially start on a Saturday/Sunday really begin the following Monday.
+    const day = new Date(official).getDay();
+    const monday = mondayOf(official);
+    return day === 0 || day === 6 ? addDays(monday, 7) : monday;
+  }
+  const first = [...i.dates].sort()[0];
+  return first ? mondayOf(first) : null;
 }
 
 export function weekOf(week1: string, iso: string): number {

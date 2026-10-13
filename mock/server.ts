@@ -159,8 +159,8 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
 
   const fileJson = (f: MockFile) => ({
     id: f.id, display_name: f.display_name, filename: f.display_name, 'content-type': f.content_type, size: f.size,
-    updated_at: f.updated_at, folder_id: '1', locked_for_user: false, hidden_for_user: false,
-    url: `${baseUrl}/files/${f.id}/download?download_frd=1&verifier=v${f.id}`,
+    updated_at: f.updated_at, folder_id: '1', locked_for_user: !!f.locked, hidden_for_user: false,
+    ...(f.locked ? {} : { url: `${baseUrl}/files/${f.id}/download?download_frd=1&verifier=v${f.id}` }),
   });
 
   function plannerItems(q: URLSearchParams) {

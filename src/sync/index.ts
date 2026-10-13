@@ -76,7 +76,7 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
   await guarded(ctx, '待办计划', () => syncPlanner(ctx, courses));
   await guarded(ctx, '缺交列表', () => syncMissing(ctx));
   await guarded(ctx, '收件箱', () => syncInbox(ctx));
-  await guarded(ctx, '提取文字', () => extractPendingFiles(ctx, { limit: 15 }));
+  await guarded(ctx, '提取文字', () => extractPendingFiles(ctx));
 
   const icsUrl = getSchool(db, school.id)?.ics_url;
   if (icsUrl) await guarded(ctx, '日历订阅', async () => mergeIcs({ ...ctx, apiOk: true }, await fetchIcs(icsUrl)));

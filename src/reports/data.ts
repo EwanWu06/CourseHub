@@ -4,6 +4,7 @@ import type { DB } from '../db/index.ts';
 import { listCourses } from '../db/courses.ts';
 import { listSchools } from '../db/schools.ts';
 import type { ItemKind, ItemRow } from '../db/types.ts';
+import { courseDisplayName } from '../util/course.ts';
 
 export type TaskStatus = 'done' | 'todo' | 'overdue' | 'missing' | 'past' | 'event';
 
@@ -64,7 +65,7 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
     const school = row.school_id ? schools.get(row.school_id) : undefined;
     return {
       id: row.id, title: row.title, kind: row.kind, provider: row.provider, courseId: course?.id ?? null,
-      courseName: course ? course.nickname || course.code || course.name : null, schoolId: school?.id ?? null,
+      courseName: course ? courseDisplayName(course) : null, schoolId: school?.id ?? null,
       schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: row.due_at, htmlUrl: row.html_url,
       points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
     };

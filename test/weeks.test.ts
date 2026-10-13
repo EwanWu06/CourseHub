@@ -36,6 +36,12 @@ test('inferWeek1 picks the Monday of the course start, else term start, else ear
   assert.equal(inferWeek1({ courseStart: null, termStart: null, dates: [] }), null);
 });
 
+test('a course that starts on a weekend begins with the following Monday', () => {
+  assert.equal(inferWeek1({ courseStart: '2026-09-20T07:00:00Z', termStart: null, dates: [] }), '2026-09-21'); // Sun Sep 20 00:00 PDT
+  assert.equal(inferWeek1({ courseStart: '2026-09-19T07:00:00Z', termStart: null, dates: [] }), '2026-09-21'); // Sat
+  assert.equal(inferWeek1({ courseStart: null, termStart: null, dates: ['2026-09-20T06:59:00Z'] }), '2026-09-14'); // a Saturday due date stays in its week
+});
+
 test('weekOf counts weeks in local time, including across DST', () => {
   assert.equal(weekOf('2026-08-24', '2026-10-12T06:00:00Z'), 7); // Sun Oct 11, 23:00 PDT
   assert.equal(weekOf('2026-08-24', '2026-10-13T06:00:00Z'), 8); // Mon Oct 12, 23:00 PDT

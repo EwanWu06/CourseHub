@@ -19,7 +19,7 @@ export interface MockModuleItem {
 }
 export interface MockModule { id: string; name: string; position: number; unlock_at: string | null; items: MockModuleItem[]; omitItems?: boolean }
 export interface MockPage { page_id: string; url: string; title: string; body: string; updated_at: string; front_page: boolean }
-export interface MockFile { id: string; display_name: string; content_type: string; size: number; updated_at: string; bytes: Buffer | null }
+export interface MockFile { id: string; display_name: string; content_type: string; size: number; updated_at: string; bytes: Buffer | null; locked?: boolean }
 export interface MockTopic {
   id: string; title: string; message: string; posted_at: string; author: string; is_announcement: boolean;
   assignment_id?: string; unread_count: number; discussion_subentry_count: number;

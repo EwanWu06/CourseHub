@@ -20,7 +20,7 @@ export interface SchoolView {
 export interface Course {
   id: string; school_id: string; canvas_id: string; name: string; code: string | null; nickname: string | null; color: string | null;
   hidden: number; term_name: string | null; start_at: string | null; end_at: string | null; html_url: string; tabs: string[] | null;
-  current_score: number | null; current_grade: string | null; week1: string | null; active: number;
+  current_score: number | null; current_grade: string | null; week1: string | null; active: number; display_name: string;
 }
 
 export interface SchoolBrief { id: string; name: string; color: string; baseUrl: string }

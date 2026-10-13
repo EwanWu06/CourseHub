@@ -8,13 +8,14 @@ import { all, one } from '../../db/sql.ts';
 import type { CourseRow, ItemRow } from '../../db/types.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
 import { currentWeek } from '../../weeks/build.ts';
+import { courseDisplayName } from '../../util/course.ts';
 import { HttpError, htmlRewriter, readJson } from './util.ts';
 
 const WEEK = 7 * 86_400_000;
 
 function publicCourse(c: CourseRow) {
   const { syllabus_html: _s, ...rest } = c;
-  return { ...rest, tabs: c.tabs ? (JSON.parse(c.tabs) as string[]) : null };
+  return { ...rest, display_name: courseDisplayName(c), tabs: c.tabs ? (JSON.parse(c.tabs) as string[]) : null };
 }
 
 function requireCourse(db: DB, id: string): CourseRow {

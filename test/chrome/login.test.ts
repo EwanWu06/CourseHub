@@ -8,7 +8,7 @@ import { openDb } from '../../src/db/index.ts';
 import { createSchool, getSchool } from '../../src/db/schools.ts';
 import { paths } from '../../src/config.ts';
 import { loadAuth } from '../../src/auth/store.ts';
-import { interactiveLogin, silentRelogin, getLoginState } from '../../src/auth/login.ts';
+import { interactiveLogin, silentRelogin, getLoginState, cancelLogin } from '../../src/auth/login.ts';
 import { withChromeLock } from '../../src/auth/chrome.ts';
 import { syncSchool } from '../../src/sync/index.ts';
 import type { Page } from 'playwright-core';
@@ -66,4 +66,51 @@ test('withChromeLock runs one Chrome job at a time', async () => {
   });
   await Promise.all([job('a'), job('b')]);
   assert.deepEqual(order, ['a:start', 'a:end', 'b:start', 'b:end']);
+});
+
+test('closing every login window ends the attempt right away (Chrome may keep running on macOS)', { timeout: 60_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha' });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    const started = Date.now();
+    const res = await interactiveLogin(db, school.id, {
+      headless: true, timeoutMs: 50_000,
+      onPage: async (page) => { await page.waitForSelector('#username'); await page.close(); },
+    });
+    assert.equal(res.ok, false);
+    assert.match(res.message, /关闭/);
+    assert.ok(Date.now() - started < 15_000, 'did not wait for the timeout');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('starting a new login cancels the one still waiting', { timeout: 90_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha' });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    const first = interactiveLogin(db, school.id, { headless: true, timeoutMs: 60_000 });
+    await new Promise((r) => setTimeout(r, 3000));
+    cancelLogin(school.id);
+    const firstRes = await first;
+    assert.equal(firstRes.ok, false);
+    assert.match(firstRes.message, /取消/);
+    const second = await interactiveLogin(db, school.id, {
+      headless: true, timeoutMs: 40_000,
+      onPage: async (page) => {
+        await page.waitForSelector('#username');
+        await page.fill('#username', 'student');
+        await page.fill('#password', 'password');
+        await page.click('#submit');
+      },
+    });
+    assert.equal(second.ok, true, second.message);
+    assert.equal(getLoginState(school.id).status, 'success');
+  } finally {
+    await mock.close();
+  }
 });
