@@ -107,7 +107,10 @@ export interface StudyWeekDetail {
   materials: { id: string; kind: string; title: string; url: string | null; pages: number | null; scanned: boolean; hasText: boolean }[];
   assignments: TaskView[];
   guide: { status: GuideBrief['status'] | null; generatedAt: string | null; error: string | null; model: string | null; stale: boolean; queued: boolean; content: GuideContent | null };
+  qa: StudyQa[];
 }
+
+export interface StudyQa { id: number; question: string; answer: string | null; status: 'pending' | 'done' | 'failed'; error: string | null; created_at: string }
 
 export interface ReportListItem { id: string; type: 'daily' | 'weekly'; period: string; createdAt: string; headline: string; aiError: string | null }
 

@@ -6,7 +6,7 @@ import { TaskList } from '../components/TaskRow.tsx';
 import { Empty, ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
 import { groupSources, pagesLabel } from '../lib/study.ts';
 import { Link } from '../router.tsx';
-import type { StudyWeekDetail } from '../types.ts';
+import type { StudyQa, StudyWeekDetail } from '../types.ts';
 
 const KIND_ICON: Record<string, string> = { file: '📄', page: '📃', assignment: '✍️', announcement: '📣', link: '🔗' };
 
@@ -123,6 +123,8 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
         </div>
       )}
 
+      {data.materials.length + data.assignments.length > 0 ? <AskBox courseId={courseId} week={week} qa={data.qa} onAsked={reload} /> : null}
+
       <Section title="本周资料" note={`${data.materials.length} 份 · 点开在 Canvas 查看`}>
         {data.materials.length === 0 ? <p className="muted">没有。</p> : (
           <div className="card list">
@@ -137,5 +139,52 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
         )}
       </Section>
     </div>
+  );
+}
+
+function AskBox({ courseId, week, qa, onAsked }: { courseId: string; week: number; qa: StudyQa[]; onAsked: () => void }) {
+  const [question, setQuestion] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ask = async (text: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/study/${encodeURIComponent(courseId)}/${week}/ask`, { method: 'POST', body: { question: text } });
+      setQuestion('');
+      onAsked();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="问一问" note="针对这周的课件提问，中文回答并标出课件页码">
+      <div className="card card-pad ask-box">
+        <textarea className="input" rows={3} maxLength={1000} value={question} placeholder="比如：为什么弱酸滴定的等当点 pH 大于 7？这页的公式是怎么来的？"
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && question.trim()) void ask(question); }} />
+        <div className="row">
+          <span className="small muted">⌘ + 回车 发送 · 一般 20–60 秒</span>
+          <button type="button" className="btn btn-sm btn-primary right" disabled={busy || !question.trim()} onClick={() => void ask(question)}>{busy ? '提交中…' : '提问'}</button>
+        </div>
+        <ErrorNote error={error} />
+      </div>
+      {qa.length ? (
+        <div className="stack qa-list">
+          {qa.map((x) => (
+            <article key={x.id} className="card card-pad qa">
+              <div className="qa-q"><span className="qa-mark">问</span>{x.question}</div>
+              {x.status === 'pending' ? <div className="qa-a muted"><span className="spinner" /> 正在读这周的课件，马上回答…</div>
+                : x.status === 'failed' ? (
+                  <div className="qa-a"><span className="muted">没答上来（{x.error}）</span> <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void ask(x.question)}>再问一次</button></div>
+                ) : <div className="qa-a"><span className="qa-mark is-a">答</span><Markdown text={x.answer ?? ''} /></div>}
+              <div className="small muted">{fmtRelative(x.created_at)}</div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </Section>
   );
 }

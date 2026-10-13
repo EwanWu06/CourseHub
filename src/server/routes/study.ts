@@ -9,6 +9,7 @@ import type { CourseRow } from '../../db/types.ts';
 import { aiQueue } from '../../ai/claude.ts';
 import { buildGuideInput } from '../../ai/guideInput.ts';
 import { enqueueGuide } from '../../ai/guide.ts';
+import { askQuestion, listQuestions } from '../../ai/ask.ts';
 import { makeTaskViewer } from '../../reports/data.ts';
 import { courseDisplayName } from '../../util/course.ts';
 import { currentWeek, lastWeek } from '../../weeks/build.ts';
@@ -80,7 +81,20 @@ export function registerStudy(app: Hono, db: DB, deps: { enqueueGuide?: (courseI
         queued: aiQueue.has(`guide:${course.id}#${week}`),
         content: g?.content ? JSON.parse(g.content) : null,
       },
+      qa: listQuestions(db, course.id, week),
     });
+  });
+
+  app.post('/api/study/:courseId/:week/ask', async (c) => {
+    const course = requireCourse(c.req.param('courseId'));
+    const week = Number(c.req.param('week'));
+    if (!Number.isInteger(week)) throw new HttpError(400, '周数不对');
+    const body = await readJson<{ question?: string }>(c).catch(() => ({ question: '' }));
+    try {
+      return c.json({ id: askQuestion(db, course.id, week, String(body.question ?? '')) }, 202);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
   });
 
   app.post('/api/study/:courseId/:week/generate', async (c) => {

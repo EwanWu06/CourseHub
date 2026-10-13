@@ -323,6 +323,14 @@ test('a note can be put on any task and shows in its view', async () => {
   assert.equal((await call(`/api/items/${id}`, { method: 'PATCH', body: { note: 'x'.repeat(301) } })).status, 400);
 });
 
+test('study questions: ask, see it in the week, refuse an empty one', async () => {
+  const r = await call('/api/study/alpha:101/6/ask', { method: 'POST', body: { question: '什么是 Krebs cycle？' } });
+  assert.equal(r.status, 202);
+  const week = await json(await call('/api/study/alpha:101/6'));
+  assert.equal(week.qa[0].question, '什么是 Krebs cycle？');
+  assert.equal((await call('/api/study/alpha:101/6/ask', { method: 'POST', body: { question: '' } })).status, 400);
+});
+
 test('unknown API paths 404; the app shell is served', async () => {
   assert.equal((await call('/api/nope')).status, 404);
   const page = await call('/today');

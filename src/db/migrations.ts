@@ -266,4 +266,19 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE items ADD COLUMN user_note TEXT;
   `,
+  // 7: questions asked about a study week, with Claude's answers
+  `
+  CREATE TABLE study_qa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    week INTEGER NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    created_at TEXT NOT NULL,
+    answered_at TEXT
+  );
+  CREATE INDEX study_qa_week ON study_qa(course_id, week);
+  `,
 ];
