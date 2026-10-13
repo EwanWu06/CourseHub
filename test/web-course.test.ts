@@ -22,3 +22,11 @@ test('itemTypeIcon covers Canvas module item types', () => {
   for (const t of ['File', 'Page', 'Assignment', 'Quiz', 'Discussion', 'ExternalUrl', 'ExternalTool', 'SubHeader']) assert.ok(itemTypeIcon(t));
   assert.equal(itemTypeIcon('Unknown'), '•');
 });
+
+test('an unknown course tab falls back to the overview', async () => {
+  const { courseTab } = await import('../web/src/lib/course.ts');
+  assert.equal(courseTab('files'), 'files');
+  assert.equal(courseTab('syllabus'), 'overview');
+  assert.equal(courseTab(undefined), 'overview');
+  assert.equal(courseTab('study'), 'overview', 'study has its own page');
+});

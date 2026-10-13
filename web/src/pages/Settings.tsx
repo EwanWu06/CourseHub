@@ -65,7 +65,7 @@ function CourseSettings({ courses, onChanged }: { courses: CourseCard[]; onChang
                 <div>{course.name}</div>
                 <div className="small muted">{school?.name}{course.term_name ? ` · ${course.term_name}` : ''}</div>
               </td>
-              <td><input className="input" style={{ width: 160 }} defaultValue={course.nickname ?? ''} placeholder={course.code ?? ''} onBlur={(e) => e.target.value !== (course.nickname ?? '') && void save(course.id, { nickname: e.target.value })} /></td>
+              <td><input className="input" style={{ width: 160 }} defaultValue={course.nickname ?? ''} placeholder={course.display_name ?? course.code ?? ''} onBlur={(e) => e.target.value !== (course.nickname ?? '') && void save(course.id, { nickname: e.target.value })} /></td>
               <td><Toggle checked={!course.hidden} label="显示这门课" onChange={(v) => void save(course.id, { hidden: !v })} /></td>
             </tr>
           ))}

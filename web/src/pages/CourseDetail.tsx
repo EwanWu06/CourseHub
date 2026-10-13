@@ -4,7 +4,7 @@ import { fmtBytes, fmtDate, fmtDateTime, fmtDue, fmtRelative } from '../format.t
 import { CanvasHtml } from '../components/CanvasHtml.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
 import { Badge, Empty, ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
-import { fileStatus, itemTypeIcon, moduleWeekLabel } from '../lib/course.ts';
+import { fileStatus, itemTypeIcon, moduleWeekLabel, courseTab } from '../lib/course.ts';
 import { STATUS_LABEL } from '../lib/tasks.ts';
 import { Link } from '../router.tsx';
 import type { CourseDetailT, FileT, GradesT, ModuleItemT, ModuleT, PageT, SyllabusT, TaskView, TopicT } from '../types.ts';
@@ -51,7 +51,10 @@ function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
         <div className="card card-pad">
           <div className="kicker">This week</div>
           <div className="big-week">{detail.currentWeek && detail.currentWeek > 0 ? `第 ${detail.currentWeek} 周` : '—'}</div>
-          <div className="small muted">{detail.course.term_name ?? ''}{detail.course.start_at ? ` · ${fmtDate(new Date(detail.course.start_at))} 开课` : ''}</div>
+          <div className="small muted">
+            {detail.course.term_name ?? ''}
+            {detail.course.week1 ? ` · 第 1 周从 ${fmtDate(new Date(`${detail.course.week1}T12:00:00`))}开始` : detail.course.start_at ? ` · ${fmtDate(new Date(detail.course.start_at))} 开课` : ''}
+          </div>
         </div>
         <div className="card card-pad">
           <div className="kicker">At a glance</div>
@@ -216,7 +219,7 @@ function Topics({ id, kind }: { id: string; kind: 'announcements' | 'discussions
             {kind === 'discussions' ? <span className="small muted">{t.reply_count} 回复</span> : null}
             <ExtLink href={t.html_url} className="small">Canvas</ExtLink>
           </div>
-          <div className="small muted">{t.author ?? ''}{t.posted_at ? ` · ${fmtDateTime(t.posted_at)}` : ''}</div>
+          <div className="small muted">{[t.author, t.posted_at ? fmtDateTime(t.posted_at) : null].filter(Boolean).join(' · ')}</div>
           {open === t.id ? <div style={{ marginTop: 12 }}><CanvasHtml html={t.message_html} /></div> : null}
         </article>
       ))}
@@ -255,7 +258,8 @@ function Grades({ id }: { id: string }) {
   );
 }
 
-export function CourseDetail({ id, tab = 'overview', sub }: { id: string; tab?: string; sub?: string }) {
+export function CourseDetail({ id, tab: requested, sub }: { id: string; tab?: string; sub?: string }) {
+  const tab = courseTab(requested);
   const { data, error } = useApi<CourseDetailT>(`/api/courses/${enc(id)}`);
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
   if (!data) return <div className="page"><Spinner /></div>;

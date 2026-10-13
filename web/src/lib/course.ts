@@ -23,3 +23,10 @@ const ICONS: Record<string, string> = {
 export function itemTypeIcon(type: string): string {
   return ICONS[type] ?? '•';
 }
+
+const COURSE_TABS = ['overview', 'assignments', 'modules', 'pages', 'files', 'announcements', 'discussions', 'grades'];
+
+/** The tab to show for a /courses/:id/:tab URL; anything unknown (an old link, a typo) shows the overview. */
+export function courseTab(tab: string | undefined): string {
+  return tab && COURSE_TABS.includes(tab) ? tab : 'overview';
+}
