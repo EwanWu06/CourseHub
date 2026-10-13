@@ -3,7 +3,7 @@
 import type { DB } from '../db/index.ts';
 import { getCourse } from '../db/courses.ts';
 import { getFile, getPage, getTopic, listModuleItems, listModules, listTopics } from '../db/content.ts';
-import { getItem, listItems } from '../db/items.ts';
+import { checkpointsOf, getItem, listItems } from '../db/items.ts';
 import { listWeeks } from '../db/study.ts';
 import { loadText } from '../content/textstore.ts';
 import { courseDisplayName } from '../util/course.ts';
@@ -34,11 +34,14 @@ export function buildGuideInput(db: DB, courseId: string, week: number): GuideIn
   const seen = new Set<string>();
   const assignments: GuideInput['assignments'] = [];
   const addAssignment = (id: string) => {
-    if (seen.has(id)) return;
-    const it = getItem(db, id);
-    if (!it || it.removed) return;
-    seen.add(id);
-    assignments.push({ id: it.id, title: it.title, points: it.points, description: htmlToText(it.description_html ?? '').slice(0, 1500) });
+    const direct = getItem(db, id);
+    // a checkpointed discussion lives on as its checkpoint tasks (initial post, replies)
+    const targets = direct && !direct.removed ? [direct] : checkpointsOf(db, id);
+    for (const it of targets) {
+      if (seen.has(it.id)) continue;
+      seen.add(it.id);
+      assignments.push({ id: it.id, title: it.title, points: it.points, description: htmlToText(it.description_html ?? '').slice(0, 1500) });
+    }
   };
 
   for (const mi of listModuleItems(db, courseId).filter((i) => moduleIds.has(i.module_id))) {

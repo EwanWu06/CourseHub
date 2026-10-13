@@ -148,7 +148,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
 
   const submissionJson = (a: MockAssignment) => ({ ...a.submission, assignment_id: a.id });
 
-  const assignmentJson = (c: MockCourse, a: MockAssignment, withSubmission: boolean) => ({
+  const assignmentJson = (c: MockCourse, a: MockAssignment, include: string[]) => ({
     id: a.id, name: a.name, description: a.description, due_at: a.due_at, unlock_at: a.unlock_at ?? null, lock_at: a.lock_at ?? null,
     points_possible: a.points_possible, submission_types: a.submission_types, course_id: c.id, published: true,
     assignment_group_id: a.group ?? null,
@@ -156,7 +156,21 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     is_quiz_assignment: !!a.is_quiz_assignment, quiz_id: a.quiz_id,
     ...(a.discussion_topic_id ? { discussion_topic: { id: a.discussion_topic_id } } : {}),
     ...(a.external_url ? { external_tool_tag_attributes: { url: a.external_url } } : {}),
-    ...(withSubmission ? { submission: submissionJson(a) } : {}),
+    // like Canvas: checkpoint details only when asked for
+    has_sub_assignments: !!a.checkpoints?.length,
+    ...(a.checkpoints && include.includes('checkpoints')
+      ? { checkpoints: a.checkpoints.map((cp) => ({ name: a.name, tag: cp.tag, points_possible: cp.points_possible, due_at: cp.due_at, only_visible_to_overrides: false, overrides: [], unlock_at: null, lock_at: null })) }
+      : {}),
+    ...(include.includes('submission')
+      ? {
+          submission: {
+            ...submissionJson(a),
+            ...(a.checkpoints && include.includes('sub_assignment_submissions')
+              ? { sub_assignment_submissions: a.checkpoints.map((cp) => ({ sub_assignment_tag: cp.tag, submitted_at: cp.submitted_at, missing: false, late: false, score: null })) }
+              : {}),
+          },
+        }
+      : {}),
   });
 
   const moduleItemJson = (c: MockCourse, m: MockModule, i: MockModuleItem) => {
@@ -232,7 +246,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     if (path === '/api/v1/courses') return { list: data.courses.map((c) => courseJson(c, q)) };
     if (path === '/api/v1/planner/items') return { list: plannerItems(q) };
     if (path === '/api/v1/users/self/missing_submissions') {
-      return { list: data.courses.flatMap((c) => c.assignments.filter((a) => a.submission.missing).map((a) => assignmentJson(c, a, false))) };
+      return { list: data.courses.flatMap((c) => c.assignments.filter((a) => a.submission.missing).map((a) => assignmentJson(c, a, []))) };
     }
     if (path === '/api/v1/announcements') {
       const start = q.get('start_date') ? Date.parse(q.get('start_date')!) : -Infinity;
@@ -265,7 +279,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       let r: RegExpMatchArray | null;
       if (rest === '') return { one: courseJson(c, q) };
       if (rest === '/tabs') return { list: c.tabs.map((id) => ({ id, label: id, html_url: `/courses/${c.id}/${id}`, type: 'internal' })) };
-      if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]').includes('submission'))) };
+      if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]'))) };
       if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1 })) };
       if (rest === '/quizzes') return { list: c.quizzes.map((qz) => ({ ...qz, html_url: `${baseUrl}/courses/${c.id}/quizzes/${qz.id}` })) };
       if (rest === '/modules') {

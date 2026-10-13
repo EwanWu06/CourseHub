@@ -126,3 +126,9 @@ test('autoEnqueueGuides queues the current and next week only', async () => {
   await aiQueue.onIdle();
   rmSync(rec, { recursive: true, force: true });
 });
+
+test('a checkpointed discussion in the week\'s module shows up as its two tasks', () => {
+  const ids = buildGuideInput(db, C, 6).assignments.map((a) => a.id);
+  assert.ok(ids.includes('alpha:a:5020:reply_to_topic'));
+  assert.ok(ids.includes('alpha:a:5020:reply_to_entry'));
+});

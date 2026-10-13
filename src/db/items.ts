@@ -120,7 +120,13 @@ export function setSyllabusDate(db: DB, id: string, date: string | null, note: s
 }
 
 export function setItemModule(db: DB, id: string, moduleId: string | null): void {
-  run(db, 'UPDATE items SET module_id = $moduleId WHERE id = $id AND (module_id IS NOT $moduleId)', { id, moduleId });
+  // a checkpointed discussion is stored as its checkpoints (<id>:reply_to_topic …): they share the placement
+  run(db, `UPDATE items SET module_id = $moduleId WHERE (id = $id OR substr(id, 1, length($id) + 1) = $id || ':') AND (module_id IS NOT $moduleId)`, { id, moduleId });
+}
+
+/** The checkpoint tasks (initial post, replies) stored for a checkpointed assignment id. */
+export function checkpointsOf(db: DB, id: string): ItemRow[] {
+  return all<ItemRow>(db, `SELECT * FROM items WHERE substr(id, 1, length($id) + 1) = $id || ':' AND removed = 0 ORDER BY due_at, id`, { id });
 }
 
 /** Exams the syllabus mentions that have no Canvas item of their own. */

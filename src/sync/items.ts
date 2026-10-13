@@ -4,7 +4,7 @@ import { CanvasForbiddenError, CanvasNotFoundError } from '../canvas/client.ts';
 import type { CanvasAssignment, CanvasAssignmentGroup, CanvasCalendarEvent, CanvasPlannerItem, CanvasQuiz } from '../canvas/types.ts';
 import { upsertAssignmentGroup } from '../db/content.ts';
 import { all } from '../db/sql.ts';
-import { getItem, markRemovedExcept, setItemFlags, upsertItem } from '../db/items.ts';
+import { checkpointsOf, getItem, markRemovedExcept, setItemFlags, upsertItem } from '../db/items.ts';
 import type { ItemUpsert } from '../db/items.ts';
 import type { CourseRow, ItemKind } from '../db/types.ts';
 import { noteItemChange } from './changes.ts';
@@ -56,6 +56,31 @@ export function assignmentRow(ctx: SyncContext, course: CourseRow, a: CanvasAssi
   };
 }
 
+const CHECKPOINT_LABEL: Record<string, string> = { reply_to_topic: '首帖', reply_to_entry: '回复同学' };
+
+/** A discussion with checkpoints has no due date of its own: it becomes one task per checkpoint, each with its own state. */
+export function assignmentRows(ctx: SyncContext, course: CourseRow, a: CanvasAssignment): ItemUpsert[] {
+  const parent = assignmentRow(ctx, course, a);
+  if (!a.has_sub_assignments || !a.checkpoints?.length) return [parent];
+  const subs = a.submission?.sub_assignment_submissions ?? [];
+  const parentModule = getItem(ctx.db, parent.id)?.module_id ?? null;
+  return a.checkpoints.map((cp) => {
+    const id = `${parent.id}:${cp.tag}`;
+    const s = subs.find((x) => x.sub_assignment_tag === cp.tag);
+    const kept = blankItem(ctx, id, course, parent.kind, parent.title);
+    return {
+      ...parent, id, title: `${a.name} · ${CHECKPOINT_LABEL[cp.tag] ?? cp.name ?? cp.tag}`,
+      canvas_done: kept.canvas_done, module_id: kept.module_id ?? parentModule,
+      due_at: cp.due_at ?? cp.overrides?.find((o) => o.due_at)?.due_at ?? null,
+      unlock_at: cp.unlock_at ?? parent.unlock_at, lock_at: cp.lock_at ?? parent.lock_at, points: cp.points_possible ?? null,
+      // never borrow the parent's state: after the initial post it says "submitted" while replies are still due
+      sub_state: s ? s.workflow_state ?? (s.submitted_at ? 'submitted' : 'unsubmitted') : parent.sub_state === 'graded' ? 'graded' : 'unsubmitted',
+      submitted_at: s?.submitted_at ?? null, missing: s?.missing ? 1 : 0, late: s?.late ? 1 : 0, excused: s?.excused ? 1 : 0,
+      score: s?.score ?? null, grade: s?.grade ?? null,
+    };
+  });
+}
+
 export async function syncAssignmentGroups(ctx: SyncContext, course: CourseRow): Promise<void> {
   try {
     const groups = await ctx.client.getAll<CanvasAssignmentGroup>(`/api/v1/courses/${course.canvas_id}/assignment_groups`);
@@ -69,13 +94,16 @@ export async function syncAssignmentGroups(ctx: SyncContext, course: CourseRow):
 
 /** Returns the ids seen; throws if the listing failed (then nothing may be marked removed). */
 export async function syncAssignments(ctx: SyncContext, course: CourseRow): Promise<Set<string>> {
-  const list = await ctx.client.getAll<CanvasAssignment>(`/api/v1/courses/${course.canvas_id}/assignments`, { 'include[]': ['submission'], order_by: 'due_at' });
+  const list = await ctx.client.getAll<CanvasAssignment>(`/api/v1/courses/${course.canvas_id}/assignments`, {
+    'include[]': ['submission', 'checkpoints', 'sub_assignment_submissions'], order_by: 'due_at',
+  });
   const seen = new Set<string>();
   for (const a of list) {
     if (a.published === false) continue;
-    const row = assignmentRow(ctx, course, a);
-    save(ctx, row);
-    seen.add(row.id);
+    for (const row of assignmentRows(ctx, course, a)) {
+      save(ctx, row);
+      seen.add(row.id);
+    }
   }
   return seen;
 }
@@ -153,6 +181,8 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
       const id = `${ctx.school.id}:a:${assignmentId}`;
       if (getItem(ctx.db, id)) {
         setItemFlags(ctx.db, id, { canvas_done: done });
+      } else if (checkpointsOf(ctx.db, id).length) {
+        // a checkpointed discussion: its checkpoint tasks already carry the dates
       } else if (course) {
         // assignment list unavailable for this course: keep what the planner knows
         save(ctx, {

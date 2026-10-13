@@ -12,6 +12,8 @@ export interface MockAssignment {
   id: string; name: string; description: string; due_at: string | null; unlock_at?: string | null; lock_at?: string | null;
   points_possible: number | null; submission_types: string[]; is_quiz_assignment?: boolean; quiz_id?: string;
   discussion_topic_id?: string; external_url?: string; submission: MockSubmission; group?: string;
+  /** a checkpointed discussion: no due date of its own; per-checkpoint due date and submission */
+  checkpoints?: { tag: 'reply_to_topic' | 'reply_to_entry'; due_at: string; points_possible: number; submitted_at: string | null }[];
 }
 export interface MockModuleItem {
   id: string; title: string; type: 'File' | 'Page' | 'Assignment' | 'Quiz' | 'Discussion' | 'ExternalUrl' | 'ExternalTool' | 'SubHeader';
@@ -97,7 +99,9 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
       { id: '3157', title: 'Broken upload', type: 'File', content_id: '7005', position: 8 },
       { id: '3158', title: 'Lecture recording', type: 'File', content_id: '7006', position: 9 },
       { id: '3159', title: 'Krebs cycle video', type: 'ExternalUrl', external_url: 'https://www.youtube.com/watch?v=krebs', position: 10 },
-      { id: '3160', title: 'Achieve: Chapter 6 Homework', type: 'Assignment', content_id: '5007', position: 11 },
+      // ids 3100 + 10·week are the weeks' "Readings" subheaders: keep clear of them
+      { id: '3163', title: 'Achieve: Chapter 6 Homework', type: 'Assignment', content_id: '5007', position: 11 },
+      { id: '3164', title: 'Lab Safety Discussion', type: 'Assignment', content_id: '5020', position: 20 },
       { id: '3161', title: 'Lab Report 3', type: 'Assignment', content_id: '5003', position: 12 },
     );
     bioModules[6].items.push(
@@ -127,6 +131,13 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
         asg('5006', 'Discussion: Ethics of GMOs', at(3), { group: '94', submission_types: ['discussion_topic'], discussion_topic_id: '501' }),
         asg('5007', 'Achieve: Chapter 6 Homework', at(4), { group: '96', submission_types: ['external_tool'], external_url: 'https://achieve.macmillanlearning.com/courses/abc/assignments/123' }),
         asg('5008', 'Lab safety signature', at(-3), { group: '93', submission_types: ['on_paper'], points_possible: 0 }),
+        asg('5020', 'Lab Safety Discussion (Initial Post Due Thursday)', null, {
+          group: '94', submission_types: ['discussion_topic'], submission: sub('pending_review', { submitted_at: at(-1, 10, 0) }),
+          checkpoints: [
+            { tag: 'reply_to_topic', due_at: at(1), points_possible: 5, submitted_at: at(-1, 10, 0) },
+            { tag: 'reply_to_entry', due_at: at(4), points_possible: 5, submitted_at: null },
+          ],
+        }),
         asg('5009', 'Extra credit essay', null, { group: '91' }),
         asg('5010', 'Homework 4', at(-9), { group: '91', submission: sub('unsubmitted', { excused: true }) }),
         asg('5011', 'Final Project', at(40), { group: '91', points_possible: 100 }),

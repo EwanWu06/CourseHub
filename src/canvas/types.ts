@@ -15,6 +15,14 @@ export interface CanvasCourse {
 export interface CanvasSubmission {
   workflow_state?: string; submitted_at?: string | null; score?: number | null; grade?: string | null; late?: boolean;
   missing?: boolean; excused?: boolean | null;
+  /** discussion checkpoints (include[]=sub_assignment_submissions): one entry per checkpoint */
+  sub_assignment_submissions?: (Omit<CanvasSubmission, 'sub_assignment_submissions'> & { sub_assignment_tag: string })[] | null;
+}
+
+/** A graded discussion split into an initial post and replies, each with its own due date (include[]=checkpoints). */
+export interface CanvasCheckpoint {
+  tag: string; name?: string; points_possible?: number | null; due_at?: string | null; unlock_at?: string | null; lock_at?: string | null;
+  overrides?: { due_at?: string | null }[];
 }
 
 export interface CanvasAssignment {
@@ -22,7 +30,7 @@ export interface CanvasAssignment {
   points_possible?: number | null; submission_types?: string[]; html_url?: string; quiz_id?: string | null;
   is_quiz_assignment?: boolean; is_quiz_lti_assignment?: boolean; discussion_topic?: { id: string } | null;
   external_tool_tag_attributes?: { url?: string | null } | null; submission?: CanvasSubmission | null; published?: boolean;
-  assignment_group_id?: string | null;
+  assignment_group_id?: string | null; has_sub_assignments?: boolean; checkpoints?: CanvasCheckpoint[] | null;
 }
 
 export interface CanvasAssignmentGroup { id: string; name: string; group_weight?: number | null; position?: number }

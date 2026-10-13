@@ -10,7 +10,7 @@ import {
   upsertPage, upsertTopic,
 } from '../db/content.ts';
 import { setCourseSyllabus } from '../db/courses.ts';
-import { getItem, setItemModule } from '../db/items.ts';
+import { setItemModule } from '../db/items.ts';
 import { run } from '../db/sql.ts';
 import type { CourseRow } from '../db/types.ts';
 import { errorText } from './context.ts';
@@ -184,7 +184,7 @@ export function resolveModuleRefs(ctx: SyncContext, course: CourseRow): void {
     else if (it.type === 'Page' && it.page_url) ref = pageIdByUrl.get(it.page_url) ?? null;
     if (ref !== it.ref_id) run(ctx.db, 'UPDATE module_items SET ref_id = $ref WHERE id = $id', { ref, id: it.id });
     const itemId = it.type === 'Discussion' && cid && ctx.topicToAssignment.has(cid) ? `${s}:a:${ctx.topicToAssignment.get(cid)}` : ref;
-    if (itemId && getItem(ctx.db, itemId)) setItemModule(ctx.db, itemId, it.module_id);
+    if (itemId) setItemModule(ctx.db, itemId, it.module_id); // also reaches a checkpointed discussion's tasks
   }
 }
 

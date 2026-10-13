@@ -7,7 +7,7 @@ import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool, getSchool, updateSchool } from '../src/db/schools.ts';
 import { getCourse, listCourses } from '../src/db/courses.ts';
-import { getItem, setItemCategory } from '../src/db/items.ts';
+import { getItem, setItemCategory, upsertItem } from '../src/db/items.ts';
 import { pendingChanges } from '../src/db/changes.ts';
 import { saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
@@ -202,6 +202,35 @@ test('items are categorised from assignment groups; a user override survives the
     await syncSchool(db, schoolId, { reason: 'test', relogin: null });
     assert.equal(cat('a:5002'), 'exam');
     assert.equal(getItem(db, `${schoolId}:a:5002`)!.category_source, 'user');
+  } finally {
+    await done(mock);
+  }
+});
+
+test('a discussion with checkpoints (initial post / replies) becomes one task per checkpoint with its own due date and status', async () => {
+  const { db, mock, schoolId } = await setup('alpha');
+  try {
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null });
+    // what an earlier version stored: the parent without a due date
+    upsertItem(db, {
+      id: 'alpha:a:5020', school_id: schoolId, course_id: 'alpha:101', kind: 'discussion', title: 'Lab Safety Discussion (Initial Post Due Thursday)',
+      due_at: null, end_at: null, unlock_at: null, lock_at: null, points: 10, html_url: null, provider: 'canvas', description_html: null,
+      submission_types: '["discussion_topic"]', sub_state: 'pending_review', submitted_at: null, missing: 0, late: 0, excused: 0, score: null,
+      grade: null, canvas_done: 0, source: 'api', module_id: null, group_id: null,
+    });
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null });
+    const post = getItem(db, 'alpha:a:5020:reply_to_topic')!;
+    const replies = getItem(db, 'alpha:a:5020:reply_to_entry')!;
+    assert.equal(post.title, 'Lab Safety Discussion (Initial Post Due Thursday) · 首帖');
+    assert.equal(replies.title, 'Lab Safety Discussion (Initial Post Due Thursday) · 回复同学');
+    assert.ok(post.due_at && replies.due_at && post.due_at < replies.due_at);
+    assert.equal(post.points, 5);
+    assert.equal(post.kind, 'discussion');
+    assert.equal(post.sub_state, 'submitted', 'the initial post was made');
+    assert.equal(replies.sub_state, 'unsubmitted', 'the replies are still to do — not taken from the parent');
+    assert.equal(getItem(db, 'alpha:a:5020')!.removed, 1, 'the undated parent is gone');
+    assert.equal(post.module_id, replies.module_id);
+    assert.ok(post.module_id, 'module placement reaches the checkpoints');
   } finally {
     await done(mock);
   }
