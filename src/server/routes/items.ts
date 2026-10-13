@@ -3,7 +3,7 @@ import type { DB } from '../../db/index.ts';
 import { createManual, deleteManual, getItem, listItems, listUndated, setItemCategory, setItemNote, setLocalDone } from '../../db/items.ts';
 import { CATEGORIES, categorizeSchool } from '../../sync/category.ts';
 import type { Category } from '../../sync/category.ts';
-import { isGradeColumn, makeTaskViewer } from '../../reports/data.ts';
+import { makeTaskViewer, undatedTasks } from '../../reports/data.ts';
 import { HttpError, isUrl, readJson } from './util.ts';
 
 const DAY = 86_400_000;
@@ -23,8 +23,7 @@ export function registerItems(app: Hono, db: DB): void {
   });
 
   app.get('/api/items/undated', (c) => {
-    const view = makeTaskViewer(db, new Date());
-    return c.json(listUndated(db, c.req.query('course')).filter((r) => !isGradeColumn(r)).map(view).filter((t) => t.status !== 'done' && t.kind !== 'event'));
+    return c.json(undatedTasks(db, new Date(), c.req.query('course')));
   });
 
   app.post('/api/items', async (c) => {

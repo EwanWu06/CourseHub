@@ -62,7 +62,7 @@ function ExamBand({ exams, now }: { exams: TaskView[]; now: Date }) {
   );
 }
 
-function Homework({ tasks, now }: { tasks: TaskView[]; now: Date }) {
+function Homework({ tasks, now, undated }: { tasks: TaskView[]; now: Date; undated: number }) {
   const { overdue, days, done } = homeworkDays(tasks, now);
   return (
     <section className="hw" aria-label="要交的作业">
@@ -84,6 +84,7 @@ function Homework({ tasks, now }: { tasks: TaskView[]; now: Date }) {
           <HomeworkList tasks={d.tasks} now={now} />
         </div>
       ))}
+      {undated ? <p className="small hw-undated"><Link to="/deadlines">另有 {undated} 项没有截止日期 →</Link></p> : null}
       {done.length ? (
         <details className="hw-done">
           <summary>已完成 / 已过 {done.length} 项</summary>
@@ -243,7 +244,7 @@ export function Today() {
           ))}
           <ExamBand exams={data.exams} now={now} />
           <div className="today-cols">
-            <Homework tasks={data.homework} now={now} />
+            <Homework tasks={data.homework} now={now} undated={data.undated ?? 0} />
             <aside className="today-aside">
               <DailyCard overview={data} />
               <StudyCard study={data.study} />

@@ -62,6 +62,8 @@ export interface Overview {
   latestDaily: { id: string; type: 'daily'; period: string; createdAt: string; headline: string; blocks: { slot: string; title: string; minutes: number }[] } | null;
   loginNeeded: { id: string; name: string; statusDetail: string | null }[];
   platforms: PlatformView[];
+  /** to-dos with no date of any kind (listed on the deadlines page) */
+  undated: number;
 }
 
 /** A publisher platform (Achieve) whose work is read alongside Canvas for one course. */
@@ -165,5 +167,6 @@ export interface SystemStatus {
   backups: { date: string; bytes: number }[];
   notifier: { applet: boolean; unread: number };
   platforms: PlatformView[];
+  clientErrors: { at: string; message: string; path: string }[];
   issues: StatusIssue[];
 }

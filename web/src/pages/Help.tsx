@@ -40,6 +40,9 @@ export function Help() {
           <Term k={<span className="badge bad">缺交</span>}>老师在 Canvas 里标了 missing。</Term>
           <Term k={<span className="badge">已过</span>}>已经过去、不需要在网上提交的（比如纸质作业、课堂考试）。</Term>
           <Term k={<span className="small" style={{ color: 'var(--amber)' }}>外部工具 · 以平台为准</span>}>在 Macmillan Learning 等外部平台完成的作业，完成情况以那个平台为准。</Term>
+          <Term k={<span className="small" style={{ color: 'var(--amber)' }}>Achieve</span>}>直接从 Macmillan Achieve 读来的作业（Canvas 里只有「Achieve Category」成绩栏，具体作业和截止时间都在 Achieve）：截止时间和完成情况就是 Achieve 自己的。点开会经 Canvas 进入 Achieve。</Term>
+          <Term k={<span className="badge">开放到</span>}>Canvas 上没写截止日期，只写了「开放到」：过了这个时间就交不了，所以按它算截止。</Term>
+          <Term k={<span className="badge">同伴互评</span>}>Canvas 分给你的同伴互评（peer review），评完 Canvas 会自动算完成。</Term>
           <Term k={<span className="badge">日程</span>}>Canvas 日历里的活动，不用交东西。</Term>
         </div>
       </section>
@@ -79,6 +82,8 @@ export function Help() {
           <Q q="电脑关机或睡眠了怎么办？">醒来后错过的同步、日报、提醒都会补上一次。Course Hub 开机自动启动，出错会自动重启。</Q>
           <Q q="数据存在哪？会丢吗？">都在这台 Mac 的 ~/CourseHub/data 里，只有本机能打开。数据库每天自动备份（保留 14 天），坏了会自动恢复。课程文件不保存，都是链接到 Canvas。</Q>
           <Q q="哪里能看出系统有没有问题？">左下角「<Link to="/status">系统状态</Link>」，有问题会亮红点，并且告诉你点哪里修。</Q>
+          <Q q="怎么知道没有漏掉东西？">每次同步完，Course Hub 都会拿 Canvas 自己的四份清单（待办、日历订阅、To Do、缺交列表）逐条核对一遍：Canvas 列出来、这里却没有或时间对不上的，都会写在「<Link to="/status">系统状态</Link>」里，连续两次都不一致就亮红点。Achieve 读不到时，「今天」页会直接提示你去 Achieve 看。</Q>
+          <Q q="页面出错或者转圈不动怎么办？">某一页出错只影响那一页，点「再试一次」或「回到今天」就行；后台连不上（比如刚更新完在重启）时顶部会提示，连上后自动刷新。后台程序卡住超过 2 分钟会自动重启，记录在通知里。</Q>
         </div>
       </section>
     </div>

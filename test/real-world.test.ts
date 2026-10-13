@@ -265,3 +265,37 @@ test('Achieve work taken down in Achieve disappears; a new one is announced like
     await mock.close();
   }
 });
+
+test('planner entries of a course Course Hub does not track (concluded) never turn into courseless tasks', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha', pageSize: 3 });
+  try {
+    const school = createSchool(db, { name: 'A', base_url: mock.baseUrl });
+    saveAuth({ schoolId: school.id, savedAt: new Date().toISOString(), userAgent: 'test-agent', cookies: mock.sessionCookies() });
+    mock.data.plannerExtras.push({ type: 'planner_note', id: '7999', course_id: '104', title: 'Last term: return the lab kit', todo_date: new Date(Date.now() + 86_400_000).toISOString() });
+    await syncSchool(db, school.id, { reason: 'test', relogin: null });
+    assert.equal(getItem(db, `${school.id}:n:7999`), undefined);
+    assert.ok(getItem(db, `${school.id}:n:71`), 'a note of a tracked course is kept');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('Today says how many to-dos have no date at all, counted exactly like the undated list', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha', pageSize: 3 });
+  try {
+    const school = createSchool(db, { name: 'A', base_url: mock.baseUrl });
+    saveAuth({ schoolId: school.id, savedAt: new Date().toISOString(), userAgent: 'test-agent', cookies: mock.sessionCookies() });
+    await syncSchool(db, school.id, { reason: 'test', relogin: null });
+    const app = createApp(db);
+    const undated = (await (await app.request('http://127.0.0.1:4123/api/items/undated')).json()) as TaskView[];
+    const overview = (await (await app.request('http://127.0.0.1:4123/api/overview')).json()) as { undated: number };
+    assert.ok(undated.some((t) => t.title === 'Extra credit essay'));
+    assert.equal(overview.undated, undated.length);
+  } finally {
+    await mock.close();
+  }
+});

@@ -177,6 +177,7 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
   const seen = new Set<string>();
   for (const p of items) {
     const course = p.course_id ? byCanvas.get(String(p.course_id)) : undefined;
+    if (p.course_id && !course) continue; // a course Course Hub doesn't track (concluded, restricted): not a courseless task
     const done = p.planner_override?.marked_complete ? 1 : 0;
     const subs = p.submissions || null;
     const assignmentId = p.plannable_type === 'assignment' ? p.plannable_id : p.plannable?.assignment_id ?? null;

@@ -199,6 +199,7 @@
   .callout.info { background: color-mix(in oklab, var(--focus) 10%, var(--card)); color: var(--ink-2); }
   .callout.ok { background: var(--moss-soft); color: var(--moss); }
   .conn-banner { max-width: 1080px; margin: 0 auto 14px; align-items: center; }
+  .hw-undated { margin: 10px 2px 0; }
 
   .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--rule-strong); border-radius: var(--radius); }
   .empty .glyph { font-family: var(--font-zh); font-size: 30px; color: var(--rule-strong); display: block; margin-bottom: 6px; }

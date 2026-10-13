@@ -7,7 +7,7 @@ import { getGuide, listWeeks } from '../../db/study.ts';
 import { currentWeek } from '../../weeks/build.ts';
 import { listSchools } from '../../db/schools.ts';
 import { all } from '../../db/sql.ts';
-import { isExamLike, makeTaskViewer } from '../../reports/data.ts';
+import { isExamLike, makeTaskViewer, undatedTasks } from '../../reports/data.ts';
 import { headlineOf } from '../../reports/view.ts';
 import type { AnyReport } from '../../reports/view.ts';
 import type { TaskView } from '../../reports/data.ts';
@@ -102,6 +102,7 @@ export function registerOverview(app: Hono, db: DB): void {
       study,
       announcements: latestAnnouncements(db, 10),
       platforms: platformViews(db),
+      undated: undatedTasks(db, now).length,
       latestDaily: dailyBrief(db),
       loginNeeded: schools.filter((s) => s.status === 'needs_login').map((s) => ({ id: s.id, name: s.name, statusDetail: s.status_detail })),
     });

@@ -140,6 +140,14 @@ export function Status() {
             </div>
           </Section>
         ) : null}
+        {data.clientErrors.length ? (
+          <Section num="vii." title="最近网页错误" note="重启后清空">
+            <div className="card card-pad small">
+              {data.clientErrors.map((e, i) => <p key={i}><span className="mono">{e.path}</span> · {fmtRelative(e.at, new Date())}：{e.message}</p>)}
+              <p className="muted">出错的那一页会显示提示，其他页面不受影响。</p>
+            </div>
+          </Section>
+        ) : null}
       </div>
     </div>
   );

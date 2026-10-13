@@ -3,7 +3,7 @@
 import type { DB } from '../db/index.ts';
 import { changesSince } from '../db/changes.ts';
 import { listCourses } from '../db/courses.ts';
-import { getItem, listItems } from '../db/items.ts';
+import { getItem, listItems, listUndated } from '../db/items.ts';
 import { listSchools } from '../db/schools.ts';
 import { all, one } from '../db/sql.ts';
 import { getGuide, listWeeks } from '../db/study.ts';
@@ -91,6 +91,12 @@ export function estimateMinutes(row: ItemRow): number {
   if (row.points <= 10) return 45;
   if (row.points <= 50) return 90;
   return 150;
+}
+
+/** To-dos with no date of any kind (not grade columns, not done, not calendar events). */
+export function undatedTasks(db: DB, now: Date, courseId?: string): TaskView[] {
+  const view = makeTaskViewer(db, now);
+  return listUndated(db, courseId).filter((r) => !isGradeColumn(r)).map(view).filter((t) => t.status !== 'done' && t.kind !== 'event');
 }
 
 /** Builds TaskViews with course/school names and colors looked up once. */
