@@ -42,6 +42,11 @@ test('dateMentioned recognises how syllabi write dates', () => {
   assert.ok(dateMentioned('Exam on 10/1', '2026-10-01'));
   assert.ok(dateMentioned('考试：10月1日', '2026-10-01'));
   assert.ok(dateMentioned('Sept. 9th quiz', '2026-09-09'));
+  // schedule rows that list both lab days of a week
+  assert.ok(dateMentioned('11 / Nov 10 & 12 / Worksheet / Knowledge Check 3', '2026-11-12'));
+  assert.ok(dateMentioned('11 / Nov 10 & 12 / Worksheet / Knowledge Check 3', '2026-11-10'));
+  assert.ok(dateMentioned('Dec 15 and 17', '2026-12-17'));
+  assert.ok(!dateMentioned('Nov 10 & 12', '2026-11-11'));
 });
 
 test('the syllabus input gathers schedule pages, syllabus files and the items with their groups', () => {

@@ -100,8 +100,11 @@ export function dateMentioned(text: string, ymd: string): boolean {
   const name = MONTHS[m - 1];
   const month = `(?:${name}|${name.slice(0, 3)}${m === 9 ? '|sept' : ''})\\.?`;
   const day = `0?${d}(?:st|nd|rd|th)?`;
+  const other = '\\d{1,2}(?:st|nd|rd|th)?';
   return [
     new RegExp(`\\b${month}\\s+${day}(?!\\d)`, 'i'),
+    // "Nov 10 & 12", "Dec 15 and 17", "Oct 6-8": a schedule row naming two days of one week
+    new RegExp(`\\b${month}\\s+${other}\\s*(?:&|and|,|-|–|/)\\s*${day}(?!\\d)`, 'i'),
     new RegExp(`\\b${day}\\s+(?:of\\s+)?${month}\\b`, 'i'),
     new RegExp(`(?<![\\d/])0?${m}/0?${d}(?![\\d])`),
     new RegExp(`${m}\\s*月\\s*${d}\\s*日`),
@@ -154,7 +157,7 @@ function buildPrompt(input: SyllabusInput): string {
   lines.push('TASKS');
   lines.push('1. exams: list every exam the sources mention — tests, midterms, finals, quizzes given as exams, practicals, and anything the teacher uses as an exam even if it has another name (e.g. "Knowledge Check", "Final Hurrah"). For each:');
   lines.push('   - title: as written; item_id: the id from ITEMS that is clearly the same assessment, else null;');
-  lines.push('   - date: YYYY-MM-DD only if a source states the day (you may read a schedule row that pairs a date with the exam); otherwise null. time: HH:MM (24h) only if stated, else null;');
+  lines.push('   - date: YYYY-MM-DD only if a source states the day (you may read a schedule row that pairs a date with the exam); otherwise null. If a schedule row gives two days of the same week (e.g. "Nov 10 & 12" for Tuesday/Thursday sections) and another source shows which weekday this student\'s exams happen (e.g. "Knowledge Check 1 ... during lab on October 1st", a Thursday), choose the matching day and quote that schedule row. time: HH:MM (24h) only if stated, else null;');
   lines.push('   - coverage: chapters/topics if stated, else null;');
   lines.push('   - quote: 5–30 words copied EXACTLY from one source (same spelling and punctuation) that names this exam — prefer the passage that also contains the date; source_id: that source\'s id.');
   lines.push('2. categories: for ITEMS whose "auto" category is wrong given the sources (e.g. an exam named "Knowledge Check" marked homework, or "Chapter 15 Homework" submitted through a quiz marked quiz), return {item_id, category, reason}. Categories: exam, quiz, homework, lab, project, discussion, reading (lecture videos/readings), participation, survey, other. Only list corrections.');
