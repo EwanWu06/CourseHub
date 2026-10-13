@@ -221,3 +221,13 @@ test('no more than 3 requests are in flight at once', async () => {
     assert.equal(max, 3);
   });
 });
+
+test('a listing that is still paging at the page limit is an error, never silently cut short', async () => {
+  let n = 0;
+  const fetchImpl = (async () => {
+    n++;
+    return new Response(JSON.stringify([{ id: n }]), { status: 200, headers: { 'Content-Type': 'application/json', Link: `<https://x.instructure.com/api/v1/things?page=${n + 1}>; rel="next"` } });
+  }) as typeof fetch;
+  const client = new CanvasClient({ baseUrl: 'https://x.instructure.com', auth: { kind: 'token', token: 't' }, fetchImpl, maxPages: 3, sleep: async () => {} });
+  await assert.rejects(client.getAll('/api/v1/things'), /more than 3 pages/);
+});

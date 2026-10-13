@@ -1,6 +1,9 @@
-// Fixture data for two mock Canvas schools. All dates are relative to `now` so tests stay stable.
+// Fixture data for three mock Canvas schools. All dates are relative to `now` so tests stay stable.
 //  alpha: 3 active courses (week-named modules; "Module N" modules; an 8-week late-start course) + 1 concluded
 //  beta:  2 courses with term dates only (no course dates); inbox messages
+//  gamma: shapes seen in the user's real schools — peer reviews, "available until"-only work, presenter overrides,
+//         checkpointed discussions, Achieve grade placeholders, announcements from before the course started,
+//         and Pages/Quizzes/Files hidden from students
 import { addDays, atLocal, localDateStr, mondayOf } from '../src/util/time.ts';
 import { makeDocx, makePdf, makePptx } from './files.ts';
 
@@ -13,7 +16,12 @@ export interface MockAssignment {
   points_possible: number | null; submission_types: string[]; is_quiz_assignment?: boolean; quiz_id?: string;
   discussion_topic_id?: string; external_url?: string; submission: MockSubmission; group?: string;
   /** a checkpointed discussion: no due date of its own; per-checkpoint due date and submission */
-  checkpoints?: { tag: 'reply_to_topic' | 'reply_to_entry'; due_at: string; points_possible: number; submitted_at: string | null }[];
+  checkpoints?: {
+    tag: 'reply_to_topic' | 'reply_to_entry'; due_at: string; points_possible: number; submitted_at: string | null;
+    sub_id?: string; done_in_planner?: boolean; required?: number;
+  }[];
+  /** the student is in a section/ad-hoc override: the ICS feed lists it as event-assignment-override-<id> "(N students)" */
+  override?: { id: string; label: string };
 }
 export interface MockModuleItem {
   id: string; title: string; type: 'File' | 'Page' | 'Assignment' | 'Quiz' | 'Discussion' | 'ExternalUrl' | 'ExternalTool' | 'SubHeader';
@@ -23,8 +31,8 @@ export interface MockModule { id: string; name: string; position: number; unlock
 export interface MockPage { page_id: string; url: string; title: string; body: string; updated_at: string; front_page: boolean }
 export interface MockFile { id: string; display_name: string; content_type: string; size: number; updated_at: string; bytes: Buffer | null; locked?: boolean }
 export interface MockTopic {
-  id: string; title: string; message: string; posted_at: string; author: string; is_announcement: boolean;
-  assignment_id?: string; unread_count: number; discussion_subentry_count: number;
+  id: string; title: string; message: string; posted_at: string | null; author: string; is_announcement: boolean;
+  assignment_id?: string; unread_count: number; discussion_subentry_count: number; created_at?: string;
 }
 export interface MockQuiz { id: string; title: string; due_at: string | null; quiz_type: string; assignment_id: string | null; points_possible: number | null }
 export interface MockEvent { id: string; title: string; start_at: string; end_at: string; all_day: boolean; description: string }
@@ -33,10 +41,15 @@ export interface MockCourse {
   term: { id: string; name: string; start_at: string | null; end_at: string | null };
   restricted?: boolean; score: number | null; grade: string | null; syllabus_body: string | null; tabs: string[];
   filesListForbidden?: boolean; assignments: MockAssignment[]; quizzes: MockQuiz[]; modules: MockModule[];
+  /** list endpoints a student gets 404/403 for when the teacher hid the tab (seen at SMC, UCLA Ext, LACCD) */
+  apiHidden?: ('pages' | 'quizzes' | 'files')[];
   groups?: { id: string; name: string; weight: number }[];
   pages: MockPage[]; files: MockFile[]; topics: MockTopic[]; events: MockEvent[];
 }
-export interface MockPlannerExtra { type: 'planner_note' | 'wiki_page'; id: string; course_id: string | null; title: string; todo_date: string; page_url?: string }
+export interface MockPlannerExtra {
+  type: 'planner_note' | 'wiki_page' | 'assessment_request'; id: string; course_id: string | null; title: string; todo_date: string; page_url?: string;
+  assignment_id?: string; workflow_state?: 'assigned' | 'completed';
+}
 export interface MockConversation {
   id: string; subject: string; last_message: string; last_message_at: string; participants: { name: string }[];
   context_name: string; workflow_state: 'read' | 'unread';
@@ -60,7 +73,7 @@ function file(id: string, display_name: string, content_type: string, updated_at
   return { id, display_name, content_type, updated_at, bytes, size: size ?? bytes?.length ?? 0 };
 }
 
-export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date()): MockData {
+export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = new Date()): MockData {
   const today = localDateStr(now);
   const at = (days: number, hh = 23, mm = 59) => atLocal(addDays(today, days), hh, mm).toISOString();
   const inHours = (h: number) => new Date(now.getTime() + h * 3_600_000).toISOString();
@@ -75,7 +88,7 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
     const suffix = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
     return `${MONTHS[d.getMonth()]} ${n}${suffix}`;
   };
-  return variant === 'alpha' ? alpha() : beta();
+  return variant === 'alpha' ? alpha() : variant === 'beta' ? beta() : gamma();
 
   function alpha(): MockData {
     const fall = { id: '1', name: 'Fall 2026', start_at: weekStart(5), end_at: weeksAfter(5, 16) };
@@ -321,6 +334,108 @@ export function buildFixtures(variant: 'alpha' | 'beta', now: Date = new Date())
         { id: '3001', subject: 'Question about Chapter 5', last_message: 'See page 142.', last_message_at: inHours(-30), participants: [{ name: 'Prof. Lee' }, { name: 'Ewan Wu' }], context_name: 'PSYCH 1', workflow_state: 'unread' },
         { id: '3002', subject: 'Welcome', last_message: 'Welcome to class', last_message_at: inHours(-400), participants: [{ name: 'Dr. Park' }, { name: 'Ewan Wu' }], context_name: 'HIST 11', workflow_state: 'read' },
       ],
+    };
+  }
+  function gamma(): MockData {
+    const DAY = 86_400_000;
+    const term = { id: '9', name: 'Fall 2026', start_at: weekStart(6), end_at: weeksAfter(6, 16) };
+    const before = (iso: string, days: number) => new Date(Date.parse(iso) - days * DAY).toISOString();
+    const ann = (id: string, title: string, posted_at: string | null, extra: Partial<MockTopic> = {}): MockTopic => ({
+      id, title, message: `<p>${title}</p>`, posted_at, author: 'Instructor', is_announcement: true, unread_count: 0, discussion_subentry_count: 0, ...extra,
+    });
+    // like SMC ENGL C1000: peer reviews, a survey that only has an "available until", presenters on an override, hidden tabs
+    const engl: MockCourse = {
+      id: '301', name: '2026 Fall - ENGL C1000 (2074) - Academic Reading and Writing (O)', course_code: 'ENGL C1000',
+      start_at: weekStart(6), end_at: weeksAfter(6, 12), term, score: 91, grade: 'A-', syllabus_body: '<p>Essays, presentations and peer reviews.</p>',
+      tabs: ['home', 'modules', 'announcements', 'assignments', 'discussions', 'grades', 'syllabus'], apiHidden: ['pages', 'quizzes', 'files'],
+      assignments: [
+        asg('7101', 'Essay #2: Rough Draft', at(-3), { submission: sub('submitted', { submitted_at: at(-4, 20, 0) }) }),
+        asg('7102', 'Course Survey', null, { lock_at: at(9), submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '7801', points_possible: 0 }),
+        asg('7103', 'Presentations: The First Half', at(5), { override: { id: '225628', label: '11 students' } }),
+        asg('7104', 'Extra Credit: Media Critique', null, { lock_at: at(-8), submission: sub('graded', { score: 5, grade: '5' }) }),
+      ],
+      quizzes: [],
+      modules: [{ id: '7150', name: 'Week 7, Module 7', position: 1, unlock_at: null, items: [
+        { id: '7151', title: 'Essay #2: Rough Draft', type: 'Assignment', content_id: '7101', position: 1 },
+        { id: '7152', title: 'Presentations: The First Half', type: 'Assignment', content_id: '7103', position: 2 },
+      ] }],
+      pages: [], files: [], events: [],
+      topics: [
+        ann('7201', 'Welcome to English C1000!', before(weekStart(6), 2)),
+        ann('7202', 'New York Times on Freedom Of Speech', null, { created_at: before(weekStart(6), 55) }),
+        ann('7203', 'Week 7, Module 7!', at(-1, 16, 0)),
+      ],
+    };
+    // like LACCD CHEM 102: 23:59 homework (all-day in the ICS feed), timed lab reports, checkpointed discussions
+    const chem: MockCourse = {
+      id: '302', name: 'CHEM 102 : General Chemistry II - FALL 2026', course_code: 'CHEM_102_17218FA26W',
+      start_at: weekStart(6), end_at: weeksAfter(6, 16), term, score: 88, grade: 'B+', syllabus_body: null,
+      tabs: ['home', 'announcements', 'modules', 'discussions', 'grades'], apiHidden: ['pages', 'quizzes', 'files'],
+      assignments: [
+        asg('7301', 'Chapter 18 Homework', at(2)),
+        asg('7302', 'Exp #24: A Rate Law and Activation Energy', at(1, 16, 25), { override: { id: '789771', label: '3 students' } }),
+        asg('7303', 'Titrations in the Real World Discussion', null, {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7351', submission: sub('unsubmitted'),
+          checkpoints: [
+            { tag: 'reply_to_topic', due_at: at(3), points_possible: 25, submitted_at: null, sub_id: '10449536' },
+            { tag: 'reply_to_entry', due_at: at(6), points_possible: 10, submitted_at: null, sub_id: '10449537', required: 2 },
+          ],
+        }),
+        asg('7304', 'Experiment 34: Share and compare results', null, {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7352', submission: sub('pending_review', { submitted_at: at(-4, 19, 0) }),
+          checkpoints: [
+            { tag: 'reply_to_topic', due_at: at(-3), points_possible: 10, submitted_at: at(-4, 19, 0), sub_id: '9911994' },
+            { tag: 'reply_to_entry', due_at: at(-1), points_possible: 5, submitted_at: null, sub_id: '9911995', required: 1, done_in_planner: true },
+          ],
+        }),
+      ],
+      quizzes: [], pages: [], files: [], events: [],
+      modules: [{ id: '7350', name: 'Chapter 18 | Week 7', position: 1, unlock_at: null, items: [
+        { id: '7353', title: 'Chapter 18 Homework', type: 'Assignment', content_id: '7301', position: 1 },
+        { id: '7354', title: 'Titrations in the Real World Discussion', type: 'Discussion', content_id: '7351', position: 2 },
+      ] }],
+      topics: [
+        ann('7361', 'Knowledge Check #2', at(-2, 14, 40)),
+        { id: '7351', title: 'Titrations in the Real World Discussion', message: '<p>Pick one titration.</p>', posted_at: at(-2, 9, 0), author: 'Instructor', is_announcement: false, assignment_id: '7303', unread_count: 0, discussion_subentry_count: 4 },
+        { id: '7352', title: 'Experiment 34: Share and compare results', message: '<p>Share.</p>', posted_at: at(-9, 9, 0), author: 'Instructor', is_announcement: false, assignment_id: '7304', unread_count: 0, discussion_subentry_count: 30 },
+      ],
+    };
+    // like UCLA Ext LIFESCI XL 7A: Achieve grade placeholders (no dates, nothing to submit) + Achieve links in modules
+    const bio: MockCourse = {
+      id: '303', name: '409680: Cell and Molecular Biology LIFESCI XL 7A (Fall 2026)', course_code: '409680',
+      start_at: weekStart(4), end_at: weeksAfter(4, 12), term, score: null, grade: null, syllabus_body: null,
+      tabs: ['home', 'announcements', 'modules', 'assignments', 'discussions', 'quizzes', 'grades'], apiHidden: ['pages', 'files'],
+      assignments: [
+        asg('7401', 'Achieve Category:  Week 1', null, { submission_types: ['none'], points_possible: 16, submission: sub('graded', { score: 15, grade: '15' }) }),
+        asg('7402', 'Achieve Category:  Week 2', null, { submission_types: ['none'], points_possible: 33, submission: sub('graded', { score: 30, grade: '30' }) }),
+        asg('7403', 'Achieve Category:  Week 5', null, { submission_types: ['none'], points_possible: 0 }),
+        asg('7404', 'Week 4 Pre-Class Reading Guide Submission', at(1, 18, 30), { submission_types: ['online_text_entry', 'online_upload'], points_possible: 5 }),
+      ],
+      quizzes: [], pages: [], files: [], events: [],
+      modules: [{ id: '7450', name: 'Achieve eBook', position: 1, unlock_at: null, items: [
+        { id: '7451', title: 'Achieve Assignments Link', type: 'ExternalTool', external_url: 'https://lmslink.bfwpub.com/index.php?custom_action=openItem&custom_resource_id=mwtool_600', position: 1 },
+      ] }],
+      topics: [ann('7461', 'First Class Meeting', at(-20, 12, 38))],
+    };
+    // like UCLA Ext MATH XL 33A: a must-read announcement posted before the first day
+    const math: MockCourse = {
+      id: '304', name: '410199: Linear Algebra MATH XL 33A (Fall 2026)', course_code: '410199',
+      start_at: weekStart(3), end_at: weeksAfter(3, 12), term, score: null, grade: null, syllabus_body: null,
+      tabs: ['home', 'announcements', 'modules', 'assignments', 'grades'], apiHidden: ['pages', 'quizzes', 'files'],
+      assignments: [asg('7601', 'HW 2', at(9)), asg('7602', 'Exam 1', at(-5), { submission: sub('graded', { score: 90, grade: '90' }) })],
+      quizzes: [], pages: [], files: [], events: [],
+      modules: [{ id: '7650', name: 'Week 4: Subspaces and their Dimensions', position: 4, unlock_at: null, items: [{ id: '7651', title: 'HW 2', type: 'Assignment', content_id: '7601', position: 1 }] }],
+      topics: [ann('7661', '[MUST READ] Week 1 Lectures moved to Sunday 6PM', before(weekStart(3), 4))],
+    };
+    return {
+      user: { id: '9003', name: 'Ewan Wu' }, icsToken: 'gamma-ics-token', token: 'mock-token',
+      courses: [engl, chem, bio, math],
+      plannerExtras: [
+        { type: 'assessment_request', id: '239991', course_id: '301', title: 'Essay #2: Rough Draft', todo_date: at(2), assignment_id: '7101', workflow_state: 'assigned' },
+        { type: 'assessment_request', id: '239992', course_id: '301', title: 'Essay #2: Rough Draft', todo_date: at(2), assignment_id: '7101', workflow_state: 'completed' },
+      ],
+      plannerDoneAssignments: new Set(),
+      conversations: [],
     };
   }
 }

@@ -21,6 +21,8 @@ export interface TaskView {
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
   dueFromSyllabus: boolean; dueDateOnly: boolean; note: string | null;
+  /** no due date in Canvas: dueAt is when the work closes ("available until") */
+  dueIsClose: boolean;
 }
 
 const DONE_STATES = new Set(['submitted', 'graded', 'pending_review']);
@@ -34,12 +36,32 @@ function types(row: ItemRow): string[] {
   }
 }
 
+const CLOSING_KINDS = new Set(['assignment', 'quiz', 'discussion']);
+
+/** Due only in the sense that it closes: no Canvas due date and no syllabus date, but an "available until". */
+export function closesOnly(row: Pick<ItemRow, 'due_at' | 'syllabus_date' | 'lock_at' | 'kind'>): boolean {
+  return !row.due_at && !row.syllabus_date && !!row.lock_at && CLOSING_KINDS.has(row.kind);
+}
+
+/** Same rule as EFFECTIVE_DUE_SQL. */
+export function effectiveDue(row: Pick<ItemRow, 'due_at' | 'syllabus_date' | 'lock_at' | 'kind'>): string | null {
+  return row.due_at ?? row.syllabus_date ?? (closesOnly(row) ? row.lock_at : null);
+}
+
+/** A "No Submission" column without a date (Achieve/iClicker grade sync, attendance): a grade, not a to-do. */
+export function isGradeColumn(row: Pick<ItemRow, 'submission_types' | 'due_at' | 'syllabus_date' | 'lock_at' | 'kind'>): boolean {
+  if (effectiveDue(row)) return false;
+  const t = types(row as ItemRow);
+  return t.length > 0 && t.every((x) => x === 'none');
+}
+
 export function taskStatus(row: ItemRow, now: Date): TaskStatus {
   if (row.kind === 'event') return 'event';
   if (row.local_done || row.canvas_done || row.excused || (row.sub_state && DONE_STATES.has(row.sub_state))) return 'done';
   if (row.missing) return 'missing';
-  const due = row.due_at ?? row.syllabus_date;
+  const due = effectiveDue(row);
   if (!due || Date.parse(due) > now.getTime()) return 'todo';
+  if (closesOnly(row)) return 'past'; // it closed: nothing can be handed in any more
   if (row.category === 'exam') return 'past'; // exams are sat, not submitted
   // Past due and not done. Only call it overdue when Canvas would actually expect an online submission.
   const t = types(row);
@@ -55,7 +77,7 @@ export function isExamLike(title: string, category?: string | null): boolean {
   return /\b(exam|midterm|final|quiz)s?\b|考试|期中|期末|测验/i.test(title);
 }
 
-const BY_CATEGORY: Record<string, number> = { exam: 120, lab: 120, project: 150, reading: 25, survey: 10, participation: 0, discussion: 40, quiz: 45 };
+const BY_CATEGORY: Record<string, number> = { exam: 120, lab: 120, project: 150, reading: 25, survey: 10, participation: 0, discussion: 40, quiz: 45, review: 30 };
 
 export function estimateMinutes(row: ItemRow): number {
   if (row.kind === 'event' && row.category !== 'exam') return 0;
@@ -81,11 +103,11 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
     return {
       id: row.id, title: row.title, kind: row.kind, provider: row.provider, courseId: course?.id ?? null,
       courseName: course ? courseDisplayName(course) : null, schoolId: school?.id ?? null,
-      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: row.due_at ?? row.syllabus_date, htmlUrl: row.html_url,
+      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: effectiveDue(row), htmlUrl: row.html_url,
       points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
       category: row.category ?? null, categorySource: row.category_source ?? null, syllabusNote: row.syllabus_note ?? null,
       dueFromSyllabus: !row.due_at && !!row.syllabus_date, dueDateOnly: !row.due_at && !!row.syllabus_date && !row.syllabus_time_known,
-      note: row.user_note ?? null,
+      note: row.user_note ?? null, dueIsClose: closesOnly(row),
     };
   };
 }

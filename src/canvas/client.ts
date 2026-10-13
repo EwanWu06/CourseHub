@@ -128,7 +128,9 @@ export class CanvasClient {
   async getAll<T>(path: string, params?: Params): Promise<T[]> {
     let next: string | null = this.url(path, { per_page: 100, ...params });
     const out: T[] = [];
-    for (let page = 0; next && page < this.maxPages; page++) {
+    for (let page = 0; next; page++) {
+      // never hand back a cut-off list: callers treat a listing as complete (and mark what's absent as removed)
+      if (page >= this.maxPages) throw new CanvasHttpError(200, next, `more than ${this.maxPages} pages — stopped instead of returning a partial list`);
       const res: { data: T[]; next: string | null } = await this.request<T[]>(next);
       if (!Array.isArray(res.data)) throw new CanvasHttpError(200, next, 'expected a JSON array');
       out.push(...res.data);

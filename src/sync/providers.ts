@@ -3,7 +3,7 @@ export type Provider = 'canvas' | 'macmillan' | 'gradescope' | 'pearson' | 'mcgr
 
 const RULES: [RegExp, Provider][] = [
   [/quiz-lti|quiz_lti/i, 'canvas'], // New Quizzes are Canvas's own tool
-  [/macmillanlearning\.com|macmillan|saplinglearning\.com/i, 'macmillan'],
+  [/macmillanlearning\.com|macmillan|saplinglearning\.com|bfwpub\.com/i, 'macmillan'],
   [/gradescope\.com/i, 'gradescope'],
   [/pearson|mylab|mastering[a-z&]*\.com/i, 'pearson'],
   [/mheducation\.com|mcgraw/i, 'mcgraw-hill'],

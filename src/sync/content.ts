@@ -140,7 +140,9 @@ export async function syncFiles(ctx: SyncContext, course: CourseRow, tabs: strin
 
 export async function syncTopics(ctx: SyncContext, course: CourseRow): Promise<void> {
   const s = ctx.school.id;
-  const start = course.start_at ?? new Date(ctx.now.getTime() - 120 * DAY).toISOString();
+  // welcome notes and "week 1 moved" go out before the first day: look a year back, not from the course start
+  const start = new Date(Math.min(course.start_at ? Date.parse(course.start_at) : ctx.now.getTime(), ctx.now.getTime()) - 365 * DAY).toISOString();
+  const recent = ctx.now.getTime() - 7 * DAY;
   await step(ctx, `${course.name} 公告`, async () => {
     const list = await ctx.client.getAll<CanvasDiscussionTopic>('/api/v1/announcements', {
       'context_codes[]': [`course_${course.canvas_id}`], start_date: start, end_date: new Date(ctx.now.getTime() + DAY).toISOString(),
@@ -148,11 +150,11 @@ export async function syncTopics(ctx: SyncContext, course: CourseRow): Promise<v
     for (const t of list) {
       const id = `${s}:t:${t.id}`;
       const { created } = upsertTopic(ctx.db, {
-        id, course_id: course.id, kind: 'announcement', title: t.title, message_html: t.message ?? null, posted_at: t.posted_at ?? null,
+        id, course_id: course.id, kind: 'announcement', title: t.title, message_html: t.message ?? null, posted_at: t.posted_at ?? t.created_at ?? null,
         author: t.author?.display_name ?? t.user_name ?? null, html_url: t.html_url ?? `${course.html_url}/discussion_topics/${t.id}`,
         reply_count: t.discussion_subentry_count ?? 0, unread_count: t.unread_count ?? 0, assignment_item_id: null,
       });
-      if (created && !ctx.firstSync) {
+      if (created && !ctx.firstSync && Date.parse(t.posted_at ?? t.created_at ?? '') >= recent) { // not an alert for last month's news
         addChange(ctx.db, { school_id: s, course_id: course.id, kind: 'announcement', ref_id: id, summary: `新公告：${course.code ?? course.name} — ${t.title}`, data: '{}' });
         ctx.stats.changes++;
       }

@@ -3,12 +3,12 @@ import { fmtDate } from '../format.ts';
 import type { ItemKind, TaskStatus, TaskView } from '../types.ts';
 
 export const KIND_LABEL: Record<ItemKind, string> = {
-  assignment: '作业', quiz: '测验', discussion: '讨论', page: '阅读', note: '备忘', event: '日程', manual: '手动',
+  assignment: '作业', quiz: '测验', discussion: '讨论', review: '互评', page: '阅读', note: '备忘', event: '日程', manual: '手动',
 };
 
 export const CATEGORY_LABEL: Record<string, string> = {
   exam: '考试', quiz: '测验', homework: '作业', lab: '实验', project: '项目 / 论文', discussion: '讨论',
-  reading: '讲课视频 / 阅读', participation: '出勤 / 参与', survey: '问卷', other: '其他',
+  reading: '讲课视频 / 阅读', participation: '出勤 / 参与', survey: '问卷', review: '同伴互评', other: '其他',
 };
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {

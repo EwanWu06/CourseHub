@@ -6,7 +6,8 @@ import type { SyncContext } from './context.ts';
 
 type ChangeCtx = Pick<SyncContext, 'db' | 'school' | 'now' | 'firstSync' | 'stats'>;
 
-const TRACKED = new Set(['assignment', 'quiz', 'discussion']);
+const TRACKED = new Set(['assignment', 'quiz', 'discussion', 'review']);
+const instant = (iso: string | null | undefined) => (iso ? Date.parse(iso) : null);
 
 export function noteItemChange(ctx: ChangeCtx, prev: ItemRow | undefined, next: ItemUpsert): void {
   if (!TRACKED.has(next.kind)) return;
@@ -20,7 +21,7 @@ export function noteItemChange(ctx: ChangeCtx, prev: ItemRow | undefined, next: 
     if (next.due_at && Date.parse(next.due_at) >= ctx.now.getTime()) record('new_item', `新作业：${next.title}`, { due_at: next.due_at });
     return;
   }
-  if ((prev.due_at ?? null) !== (next.due_at ?? null)) record('due_changed', `截止时间变化：${next.title}`, { from: prev.due_at, to: next.due_at });
+  if (instant(prev.due_at) !== instant(next.due_at)) record('due_changed', `截止时间变化：${next.title}`, { from: prev.due_at, to: next.due_at });
   if (prev.score === null && next.score !== null) record('graded', `成绩已公布：${next.title}`, { score: next.score, points: next.points });
   if (!prev.missing && next.missing) record('missing', `被标记缺交：${next.title}`, {});
 }

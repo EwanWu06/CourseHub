@@ -8,6 +8,12 @@ import { getCourse } from './courses.ts';
 /** What a sync writes. Category and syllabus fields are owned by the classifier / syllabus pass / user. */
 export type ItemUpsert = Omit<ItemRow, 'first_seen_at' | 'updated_at' | 'local_done' | 'removed' | 'category' | 'category_source' | 'syllabus_date' | 'syllabus_note' | 'syllabus_time_known' | 'user_note'>;
 
+/** Labels for the tasks a checkpointed discussion is split into. */
+export const CHECKPOINT_LABEL: Record<string, string> = { reply_to_topic: '首帖', reply_to_entry: '回复同学' };
+
+/** When it's due: Canvas's due date, else a date verified in the syllabus, else when the work closes ("available until"). */
+export const EFFECTIVE_DUE_SQL = "COALESCE(i.due_at, i.syllabus_date, CASE WHEN i.kind IN ('assignment', 'quiz', 'discussion') THEN i.lock_at END)";
+
 const COLS = ['id', 'school_id', 'course_id', 'kind', 'title', 'due_at', 'end_at', 'unlock_at', 'lock_at', 'points',
   'html_url', 'provider', 'description_html', 'submission_types', 'sub_state', 'submitted_at', 'missing', 'late',
   'excused', 'score', 'grade', 'canvas_done', 'source', 'module_id', 'group_id'] as const;
@@ -47,17 +53,16 @@ function filters(q: ListQuery): { where: string[]; params: Record<string, unknow
 /** Dated items ordered by due date. */
 export function listItems(db: DB, q: ListQuery = {}): ItemRow[] {
   const { where, params } = filters(q);
-  // Effective due date: Canvas first, else a date verified in the syllabus.
-  where.push('COALESCE(i.due_at, i.syllabus_date) IS NOT NULL');
-  if (q.from) { where.push('COALESCE(i.due_at, i.syllabus_date) >= $from'); params.from = q.from; }
-  if (q.to) { where.push('COALESCE(i.due_at, i.syllabus_date) < $to'); params.to = q.to; }
+  where.push(`${EFFECTIVE_DUE_SQL} IS NOT NULL`);
+  if (q.from) { where.push(`${EFFECTIVE_DUE_SQL} >= $from`); params.from = q.from; }
+  if (q.to) { where.push(`${EFFECTIVE_DUE_SQL} < $to`); params.to = q.to; }
   return all<ItemRow>(db, `SELECT i.* FROM items i LEFT JOIN courses c ON c.id = i.course_id
-                           WHERE ${where.join(' AND ')} ORDER BY COALESCE(i.due_at, i.syllabus_date), i.title`, params);
+                           WHERE ${where.join(' AND ')} ORDER BY ${EFFECTIVE_DUE_SQL}, i.title`, params);
 }
 
 export function listUndated(db: DB, courseId?: string): ItemRow[] {
   const { where, params } = filters({ courseId });
-  where.push('i.due_at IS NULL AND i.syllabus_date IS NULL');
+  where.push(`${EFFECTIVE_DUE_SQL} IS NULL`);
   return all<ItemRow>(db, `SELECT i.* FROM items i LEFT JOIN courses c ON c.id = i.course_id
                            WHERE ${where.join(' AND ')} ORDER BY i.course_id, i.title`, params);
 }

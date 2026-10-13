@@ -1,13 +1,13 @@
 // Shapes returned by the Course Hub API (mirrors src/server routes).
 export type TaskStatus = 'done' | 'todo' | 'overdue' | 'missing' | 'past' | 'event';
-export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'page' | 'note' | 'event' | 'manual';
+export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'review' | 'page' | 'note' | 'event' | 'manual';
 
 export interface TaskView {
   id: string; title: string; kind: ItemKind; provider: string; courseId: string | null; courseName: string | null;
   schoolId: string | null; schoolName: string | null; color: string; dueAt: string | null; htmlUrl: string | null;
   points: number | null; status: TaskStatus; estMinutes: number; source: 'api' | 'ics' | 'manual' | 'syllabus'; localDone: boolean;
   category: string | null; categorySource: string | null; syllabusNote: string | null;
-  dueFromSyllabus: boolean; dueDateOnly: boolean;
+  dueFromSyllabus: boolean; dueDateOnly: boolean; dueIsClose?: boolean;
   note: string | null;
 }
 

@@ -2,8 +2,10 @@
 // submitted through a quiz, an exam that is a plain assignment — so we look at the assignment group first.
 // Users can override (category_source 'user'); the AI syllabus pass may refine (category_source 'syllabus').
 
-export type Category = 'exam' | 'quiz' | 'homework' | 'lab' | 'project' | 'discussion' | 'reading' | 'participation' | 'survey' | 'other';
-export const CATEGORIES: Category[] = ['exam', 'quiz', 'homework', 'lab', 'project', 'discussion', 'reading', 'participation', 'survey', 'other'];
+export type Category = 'exam' | 'quiz' | 'homework' | 'lab' | 'project' | 'discussion' | 'reading' | 'participation' | 'survey' | 'review' | 'other';
+export const CATEGORIES: Category[] = ['exam', 'quiz', 'homework', 'lab', 'project', 'discussion', 'reading', 'participation', 'survey', 'review', 'other'];
+/** What the syllabus pass may pick from (a peer review is known from Canvas, never guessed). */
+export const SYLLABUS_CATEGORIES: Category[] = CATEGORIES.filter((c) => c !== 'review');
 
 export interface GroupInfo { name: string; weight: number; count: number }
 export interface Classified { category: Category; source: 'group' | 'group-shape' | 'title' | 'kind' }
@@ -34,6 +36,7 @@ const TITLE_RULES: [RegExp, Category][] = [
 
 export function classifyItem(item: { title: string; kind: string; submission_types?: string[] | null }, group: GroupInfo | null): Classified {
   if (item.kind === 'note') return { category: 'other', source: 'kind' }; // the user's own planner notes
+  if (item.kind === 'review') return { category: 'review', source: 'kind' }; // reviewing a classmate's "Midterm essay" is not an exam
   if (STRONG_EXAM.test(item.title)) return { category: 'exam', source: 'title' };
   if (item.kind === 'discussion') return { category: 'discussion', source: 'kind' };
   if (group) {

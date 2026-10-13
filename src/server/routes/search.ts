@@ -1,4 +1,5 @@
 // One search box for everything: tasks/exams, courses, files, pages, announcements and discussions.
+import { EFFECTIVE_DUE_SQL } from '../../db/items.ts';
 import type { Hono } from 'hono';
 import type { DB } from '../../db/index.ts';
 import { all } from '../../db/sql.ts';
@@ -18,7 +19,7 @@ export function registerSearch(app: Hono, db: DB): void {
 
     const tasks = all<ItemRow>(db, `SELECT i.* FROM items i LEFT JOIN courses c ON c.id = i.course_id
         WHERE i.removed = 0 AND (c.id IS NULL OR (${visible})) AND i.title LIKE $like ESCAPE '\\'
-        ORDER BY COALESCE(i.due_at, i.syllabus_date) IS NULL, abs(julianday(COALESCE(i.due_at, i.syllabus_date)) - julianday('now')) LIMIT 10`, { like })
+        ORDER BY ${EFFECTIVE_DUE_SQL} IS NULL, abs(julianday(${EFFECTIVE_DUE_SQL}) - julianday('now')) LIMIT 10`, { like })
       .map(view);
     const courses = all<CourseRow & { school_name: string }>(db, `SELECT c.*, s.name AS school_name FROM courses c JOIN schools s ON s.id = c.school_id
         WHERE ${visible} AND (c.name LIKE $like ESCAPE '\\' OR c.code LIKE $like ESCAPE '\\' OR c.nickname LIKE $like ESCAPE '\\') LIMIT 6`, { like })

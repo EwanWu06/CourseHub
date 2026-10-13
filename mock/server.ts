@@ -11,7 +11,7 @@ import type { MockAssignment, MockCourse, MockData, MockFile, MockModule, MockMo
 import { TINY_PNG } from './files.ts';
 
 export interface MockOptions {
-  variant: 'alpha' | 'beta';
+  variant: 'alpha' | 'beta' | 'gamma';
   now?: Date;
   port?: number;
   idp?: boolean;
@@ -216,6 +216,17 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
           items.push({ ...base, plannable_type: 'assignment', plannable_id: a.id, html_url: `/courses/${c.id}/assignments/${a.id}`, plannable: { id: a.id, title: a.name, due_at: a.due_at, points_possible: a.points_possible } });
         }
       }
+      for (const a of c.assignments) {
+        for (const cp of (a.checkpoints ?? []).filter((x) => inRange(x.due_at))) {
+          items.push({
+            course_id: c.id, context_name: c.name, plannable_type: 'sub_assignment', plannable_id: cp.sub_id ?? `${a.id}${cp.tag === 'reply_to_topic' ? 1 : 2}`,
+            plannable_date: cp.due_at, new_activity: false, html_url: `/courses/${c.id}/assignments/${a.id}/submissions/${data.user.id}`,
+            planner_override: cp.done_in_planner ? { marked_complete: true, dismissed: false } : null,
+            submissions: { submitted: !!cp.submitted_at, excused: false, graded: false, late: false, missing: false, needs_grading: !!cp.submitted_at },
+            plannable: { id: cp.sub_id, title: a.name, sub_assignment_tag: cp.tag, due_at: cp.due_at, points_possible: cp.points_possible },
+          });
+        }
+      }
       for (const qz of c.quizzes.filter((x) => !x.assignment_id && inRange(x.due_at))) {
         items.push({ course_id: c.id, context_name: c.name, plannable_type: 'quiz', plannable_id: qz.id, plannable_date: qz.due_at, html_url: `/courses/${c.id}/quizzes/${qz.id}`, submissions: false, planner_override: null, plannable: { id: qz.id, title: qz.title, due_at: qz.due_at } });
       }
@@ -226,8 +237,9 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     for (const x of data.plannerExtras.filter((p) => inRange(p.todo_date))) {
       items.push({
         course_id: x.course_id, plannable_type: x.type, plannable_id: x.id, plannable_date: x.todo_date, submissions: false, planner_override: null,
-        html_url: x.type === 'wiki_page' ? `/courses/${x.course_id}/pages/${x.page_url}` : `/planner_notes/${x.id}`,
-        plannable: { id: x.id, title: x.title, todo_date: x.todo_date },
+        html_url: x.type === 'wiki_page' ? `/courses/${x.course_id}/pages/${x.page_url}`
+          : x.type === 'assessment_request' ? `/courses/${x.course_id}/assignments/${x.assignment_id}?reviewee_id=283479` : `/planner_notes/${x.id}`,
+        plannable: { id: x.id, title: x.title, todo_date: x.todo_date, ...(x.workflow_state ? { workflow_state: x.workflow_state } : {}) },
       });
     }
     return items.sort((a, b) => String((a as { plannable_date: string }).plannable_date).localeCompare(String((b as { plannable_date: string }).plannable_date)));
@@ -250,8 +262,8 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     }
     if (path === '/api/v1/announcements') {
       const start = q.get('start_date') ? Date.parse(q.get('start_date')!) : -Infinity;
-      return { list: contextCourses().flatMap((c) => c.topics.filter((t) => t.is_announcement && Date.parse(t.posted_at) >= start).map((t) => ({
-        id: t.id, title: t.title, message: t.message, posted_at: t.posted_at, author: { display_name: t.author }, user_name: t.author,
+      return { list: contextCourses().flatMap((c) => c.topics.filter((t) => t.is_announcement && Date.parse(t.posted_at ?? t.created_at ?? '') >= start).map((t) => ({
+        id: t.id, title: t.title, message: t.message, posted_at: t.posted_at, created_at: t.created_at ?? t.posted_at, author: { display_name: t.author }, user_name: t.author,
         html_url: `${baseUrl}/courses/${c.id}/discussion_topics/${t.id}`, context_code: `course_${c.id}`, is_announcement: true,
       }))) };
     }
@@ -281,6 +293,10 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       if (rest === '/tabs') return { list: c.tabs.map((id) => ({ id, label: id, html_url: `/courses/${c.id}/${id}`, type: 'internal' })) };
       if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]'))) };
       if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1 })) };
+      const hidden = (what: 'pages' | 'quizzes' | 'files') => c.apiHidden?.includes(what);
+      if (rest === '/quizzes' && hidden('quizzes')) return { status: 404, body: { errors: [{ message: 'The specified resource does not exist.' }] } };
+      if (rest === '/pages' && hidden('pages')) return { status: 404, body: { errors: [{ message: 'The specified resource does not exist.' }] } };
+      if (rest === '/files' && hidden('files')) return { status: 403, body: { status: 'unauthorized', errors: [{ message: 'user not authorized to perform that action' }] } };
       if (rest === '/quizzes') return { list: c.quizzes.map((qz) => ({ ...qz, html_url: `${baseUrl}/courses/${c.id}/quizzes/${qz.id}` })) };
       if (rest === '/modules') {
         const withItems = q.getAll('include[]').includes('items');
@@ -351,15 +367,37 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
   }
 
   function ics(): string {
+    // Canvas's real format: assignments link to the calendar with #assignment_<id>; 11:59 PM deadlines are all-day
+    // dates; overrides the student is in become event-assignment-override-<id>; checkpoints event-sub-assignment-<id>.
     const fmt = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const esc = (t: string) => t.replace(/([;,])/g, '\\$1');
+    const when = (iso: string) => {
+      const d = new Date(iso);
+      return d.getHours() === 23 && d.getMinutes() === 59
+        ? [`DTSTART;VALUE=DATE;VALUE=DATE:${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`]
+        : [`DTSTART:${fmt(iso)}`, `DTEND:${fmt(iso)}`];
+    };
+    const calUrl = (c: MockCourse, iso: string, assignmentId: string) => {
+      const d = new Date(iso);
+      return `URL;VALUE=URI:${baseUrl}/calendar?include_contexts=course_${c.id}&month=${pad(d.getMonth() + 1)}&year=${d.getFullYear()}#assignment_${assignmentId}`;
+    };
     const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Instructure//Canvas//EN', 'CALSCALE:GREGORIAN'];
     for (const c of data.courses.filter((x) => !x.restricted)) {
       for (const a of c.assignments.filter((x) => x.due_at)) {
-        lines.push('BEGIN:VEVENT', `DTSTART:${fmt(a.due_at!)}`, `DTEND:${fmt(a.due_at!)}`, `SUMMARY:${a.name} [${c.course_code}]`,
-          `URL;VALUE=URI:${baseUrl}/courses/${c.id}/assignments/${a.id}`, `UID:event-assignment-${a.id}`, 'END:VEVENT');
+        const uid = a.override ? `event-assignment-override-${a.override.id}` : `event-assignment-${a.id}`;
+        const title = a.override ? `${a.name} (${a.override.label})` : a.name;
+        lines.push('BEGIN:VEVENT', `UID:${uid}`, ...when(a.due_at!), `SUMMARY:${esc(title)} [${c.course_code}]`, calUrl(c, a.due_at!, a.id), 'END:VEVENT');
+      }
+      for (const a of c.assignments) {
+        for (const cp of a.checkpoints ?? []) {
+          const label = cp.tag === 'reply_to_topic' ? 'Reply to Topic' : `Required Replies (${cp.required ?? 2})`;
+          lines.push('BEGIN:VEVENT', `UID:event-sub-assignment-${cp.sub_id ?? `${a.id}${cp.tag === 'reply_to_topic' ? 1 : 2}`}`, ...when(cp.due_at),
+            `SUMMARY:${esc(a.name)} ${label} [${c.course_code}]`, calUrl(c, cp.due_at, a.id), 'END:VEVENT');
+        }
       }
       for (const e of c.events) {
-        lines.push('BEGIN:VEVENT', `DTSTART:${fmt(e.start_at)}`, `DTEND:${fmt(e.end_at)}`, `SUMMARY:${e.title} [${c.course_code}]`,
+        lines.push('BEGIN:VEVENT', `DTSTART:${fmt(e.start_at)}`, `DTEND:${fmt(e.end_at)}`, `SUMMARY:${esc(e.title)} [${c.course_code}]`,
           `URL;VALUE=URI:${baseUrl}/calendar?event_id=${e.id}&include_contexts=course_${c.id}`, `UID:event-calendar-event-${e.id}`, 'END:VEVENT');
       }
     }

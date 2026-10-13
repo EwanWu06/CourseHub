@@ -98,3 +98,45 @@ test('fetchIcs downloads and parses; non-2xx throws', async () => {
     await srv.close();
   }
 });
+
+const REAL = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Instructure//Canvas//EN',
+  'BEGIN:VEVENT', 'UID:event-assignment-override-225628', 'DTSTART;VALUE=DATE;VALUE=DATE:20260925',
+  'SUMMARY:Presentations: The First Half (11 students) [SMC 2026 Fall - ENGL C1000 (2074)]',
+  'URL;VALUE=URI:https://online.smc.edu/calendar?include_contexts=course_84049&month=09&year=2026#assignment_2252184', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:event-sub-assignment-10449536', 'DTSTART;VALUE=DATE;VALUE=DATE:20261015',
+  'SUMMARY:Titrations in the Real World Discussion (Initial Post Due Thursday) Reply to Topic [CHEM_102_17218FA26W]',
+  'URL;VALUE=URI:https://ilearn.laccd.edu/calendar?include_contexts=course_374998&month=10&year=2026#assignment_10449535', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:event-sub-assignment-10449537', 'DTSTART;VALUE=DATE;VALUE=DATE:20261018',
+  'SUMMARY:Titrations in the Real World Discussion (Initial Post Due Thursday) Required Replies (2) [CHEM_102_17218FA26W]',
+  'URL;VALUE=URI:https://ilearn.laccd.edu/calendar?include_contexts=course_374998&month=10&year=2026#assignment_10449535', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:event-assignment-10399660', 'DTSTART:20260924T232500Z', 'DTEND:20260924T232500Z',
+  'SUMMARY:Experiment 16: Le Châtelier’s Principle\; Buffers — Lab Report [CHEM_102_17218FA26W]',
+  'URL;VALUE=URI:https://ilearn.laccd.edu/calendar?include_contexts=course_374998&month=09&year=2026#assignment_10399660', 'END:VEVENT',
+  'END:VCALENDAR',
+].join('\r\n');
+
+test('real Canvas feeds: an override event belongs to its assignment, not to the override id', () => {
+  const ev = parseIcs(REAL).find((e) => e.uid === 'event-assignment-override-225628')!;
+  assert.equal(ev.kind, 'assignment');
+  assert.equal(ev.canvasId, '2252184');
+  assert.equal(ev.courseCanvasId, '84049');
+  assert.equal(ev.title, 'Presentations: The First Half');
+});
+
+test('real Canvas feeds: an all-day assignment date means due at 11:59 PM that day', () => {
+  const ev = parseIcs(REAL).find((e) => e.uid === 'event-assignment-override-225628')!;
+  assert.equal(ev.allDay, true);
+  assert.equal(ev.start, new Date(2026, 8, 25, 23, 59, 59).toISOString());
+  const timed = parseIcs(REAL).find((e) => e.uid === 'event-assignment-10399660')!;
+  assert.equal(timed.start, '2026-09-24T23:25:00.000Z');
+  assert.equal(timed.title, 'Experiment 16: Le Châtelier’s Principle; Buffers — Lab Report');
+});
+
+test('real Canvas feeds: checkpoint events map to the discussion and its checkpoint', () => {
+  const evs = parseIcs(REAL).filter((e) => e.uid.startsWith('event-sub-assignment'));
+  assert.deepEqual(evs.map((e) => [e.kind, e.canvasId, e.checkpoint, e.title]), [
+    ['assignment', '10449535', 'reply_to_topic', 'Titrations in the Real World Discussion (Initial Post Due Thursday)'],
+    ['assignment', '10449535', 'reply_to_entry', 'Titrations in the Real World Discussion (Initial Post Due Thursday)'],
+  ]);
+});

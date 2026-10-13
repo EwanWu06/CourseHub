@@ -14,7 +14,7 @@ export interface CourseRow {
   current_grade: string | null; week1: string | null; active: number; updated_at: string;
 }
 
-export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'page' | 'note' | 'event' | 'manual';
+export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'review' | 'page' | 'note' | 'event' | 'manual';
 
 export interface ItemRow {
   id: string; school_id: string | null; course_id: string | null; kind: ItemKind; title: string;

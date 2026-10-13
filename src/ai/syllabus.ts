@@ -9,7 +9,7 @@ import { getKV, setKV } from '../db/settings.ts';
 import { all, run } from '../db/sql.ts';
 import { listWeeks } from '../db/study.ts';
 import { loadText } from '../content/textstore.ts';
-import { CATEGORIES } from '../sync/category.ts';
+import { SYLLABUS_CATEGORIES } from '../sync/category.ts';
 import type { Category } from '../sync/category.ts';
 import { sha256 } from '../util/hash.ts';
 import { htmlToText } from '../util/html.ts';
@@ -165,7 +165,7 @@ const SCHEMA = {
     },
     categories: {
       type: 'array',
-      items: { type: 'object', required: ['item_id', 'category', 'reason'], properties: { item_id: { type: 'string' }, category: { type: 'string', enum: CATEGORIES }, reason: { type: 'string' } } },
+      items: { type: 'object', required: ['item_id', 'category', 'reason'], properties: { item_id: { type: 'string' }, category: { type: 'string', enum: SYLLABUS_CATEGORIES }, reason: { type: 'string' } } },
     },
     weeks: { type: 'array', items: { type: 'object', required: ['week', 'topics'], properties: { week: { type: 'integer' }, topics: { type: 'array', items: { type: 'string' } } } } },
     module_weeks: { type: 'array', items: { type: 'object', required: ['module_id', 'week'], properties: { module_id: { type: 'string' }, week: { type: 'integer' } } } },
@@ -258,7 +258,7 @@ export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusI
 
   for (const c of result.categories ?? []) {
     const item = inCourse(c.item_id);
-    if (!item || item.category_source === 'user' || !CATEGORIES.includes(c.category as Category)) continue;
+    if (!item || item.category_source === 'user' || !SYLLABUS_CATEGORIES.includes(c.category as Category)) continue;
     setItemCategory(db, item.id, c.category, 'syllabus');
     summary.categoriesApplied++;
   }

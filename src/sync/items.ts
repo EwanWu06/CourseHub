@@ -3,8 +3,9 @@
 import { CanvasForbiddenError, CanvasNotFoundError } from '../canvas/client.ts';
 import type { CanvasAssignment, CanvasAssignmentGroup, CanvasCalendarEvent, CanvasPlannerItem, CanvasQuiz } from '../canvas/types.ts';
 import { upsertAssignmentGroup } from '../db/content.ts';
-import { all } from '../db/sql.ts';
-import { checkpointsOf, getItem, markRemovedExcept, setItemFlags, upsertItem } from '../db/items.ts';
+import { all, run } from '../db/sql.ts';
+import { CHECKPOINT_LABEL, checkpointsOf, getItem, markRemovedExcept, setItemFlags, upsertItem } from '../db/items.ts';
+import { nowIso } from '../db/index.ts';
 import type { ItemUpsert } from '../db/items.ts';
 import type { CourseRow, ItemKind } from '../db/types.ts';
 import { noteItemChange } from './changes.ts';
@@ -55,8 +56,6 @@ export function assignmentRow(ctx: SyncContext, course: CourseRow, a: CanvasAssi
     late: s?.late ? 1 : 0, excused: s?.excused ? 1 : 0, score: s?.score ?? null, grade: s?.grade ?? null,
   };
 }
-
-const CHECKPOINT_LABEL: Record<string, string> = { reply_to_topic: '首帖', reply_to_entry: '回复同学' };
 
 /** A discussion with checkpoints has no due date of its own: it becomes one task per checkpoint, each with its own state. */
 export function assignmentRows(ctx: SyncContext, course: CourseRow, a: CanvasAssignment): ItemUpsert[] {
@@ -164,11 +163,17 @@ export async function syncCalendarEvents(ctx: SyncContext, courses: CourseRow[])
   }
 }
 
+// to-dos that only the planner knows about; gone from the planner (inside its window) = gone from Canvas
+const PLANNER_ONLY = ['pr', 'w', 'n', 'd'];
+
 export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promise<void> {
   const byCanvas = new Map(courses.map((c) => [c.canvas_id, c]));
+  const from = ctx.now.getTime() - 30 * DAY;
+  const to = ctx.now.getTime() + 120 * DAY;
   const items = await ctx.client.getAll<CanvasPlannerItem>('/api/v1/planner/items', {
-    start_date: new Date(ctx.now.getTime() - 30 * DAY).toISOString(), end_date: new Date(ctx.now.getTime() + 120 * DAY).toISOString(),
+    start_date: new Date(from).toISOString(), end_date: new Date(to).toISOString(),
   });
+  const seen = new Set<string>();
   for (const p of items) {
     const course = p.course_id ? byCanvas.get(String(p.course_id)) : undefined;
     const done = p.planner_override?.marked_complete ? 1 : 0;
@@ -176,6 +181,35 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
     const assignmentId = p.plannable_type === 'assignment' ? p.plannable_id : p.plannable?.assignment_id ?? null;
     const title = p.plannable?.title ?? '(untitled)';
     const todo = p.plannable?.todo_date ?? p.plannable?.due_at ?? p.plannable_date ?? null;
+
+    if (p.plannable_type === 'assessment_request') {
+      // a classmate's work the student must peer-review
+      const id = `${ctx.school.id}:pr:${p.plannable_id}`;
+      seen.add(id);
+      save(ctx, {
+        ...blankItem(ctx, id, course, 'review', `${title} · 同伴互评`), due_at: todo, html_url: absolute(ctx, p.html_url), canvas_done: done,
+        submission_types: '["peer_review"]', sub_state: p.plannable?.workflow_state === 'completed' ? 'submitted' : 'unsubmitted',
+      });
+      continue;
+    }
+    if (p.plannable_type === 'sub_assignment') {
+      // one checkpoint of a checkpointed discussion; the parent assignment id is in the link
+      const parent = (p.html_url ?? '').match(/\/assignments\/(\d+)/)?.[1];
+      const tag = p.plannable?.sub_assignment_tag;
+      if (!parent || !tag) continue;
+      const id = `${ctx.school.id}:a:${parent}:${tag}`;
+      if (getItem(ctx.db, id)) {
+        setItemFlags(ctx.db, id, { canvas_done: done });
+      } else if (course) {
+        save(ctx, {
+          ...blankItem(ctx, id, course, 'discussion', `${title} · ${CHECKPOINT_LABEL[tag] ?? tag}`), due_at: p.plannable?.due_at ?? p.plannable_date ?? null,
+          points: p.plannable?.points_possible ?? null, html_url: `${course.html_url}/assignments/${parent}`, canvas_done: done,
+          submission_types: '["discussion_topic"]', sub_state: subs ? (subs.graded ? 'graded' : subs.submitted ? 'submitted' : 'unsubmitted') : null,
+          missing: subs?.missing ? 1 : 0, late: subs?.late ? 1 : 0, excused: subs?.excused ? 1 : 0,
+        });
+      }
+      continue;
+    }
 
     if (assignmentId && ['assignment', 'quiz', 'discussion_topic'].includes(p.plannable_type)) {
       const id = `${ctx.school.id}:a:${assignmentId}`;
@@ -201,6 +235,7 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
     const mapped = kindPrefix[p.plannable_type];
     if (!mapped) continue; // calendar events come from their own endpoint
     const id = `${ctx.school.id}:${mapped[0]}:${p.plannable_id}`;
+    seen.add(id);
     const existing = getItem(ctx.db, id);
     if (existing && mapped[1] === 'quiz') {
       setItemFlags(ctx.db, id, { canvas_done: done, ...(subs && subs.submitted ? { sub_state: 'submitted' } : {}) });
@@ -210,6 +245,14 @@ export async function syncPlanner(ctx: SyncContext, courses: CourseRow[]): Promi
       ...blankItem(ctx, id, course, mapped[1], title), due_at: todo, html_url: absolute(ctx, p.html_url), canvas_done: done,
       submission_types: '["not_graded"]', description_html: p.plannable?.details ?? null,
     });
+  }
+  // deleted planner notes, withdrawn peer reviews, page to-dos taken down: the planner lists everything in its window
+  const like = PLANNER_ONLY.map((p, i) => `id LIKE $p${i}`).join(' OR ');
+  const params = Object.fromEntries(PLANNER_ONLY.map((p, i) => [`p${i}`, `${ctx.school.id}:${p}:%`]));
+  for (const r of all<{ id: string; due_at: string | null }>(ctx.db, `SELECT id, due_at FROM items WHERE removed = 0 AND (${like})`, params)) {
+    const t = r.due_at ? Date.parse(r.due_at) : NaN;
+    if (seen.has(r.id) || !(t >= from && t < to)) continue;
+    run(ctx.db, 'UPDATE items SET removed = 1, updated_at = $now WHERE id = $id', { id: r.id, now: nowIso() });
   }
 }
 

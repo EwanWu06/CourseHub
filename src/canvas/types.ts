@@ -46,7 +46,10 @@ export interface CanvasPlannerSubmissions {
 
 export interface CanvasPlannerItem {
   plannable_id: string; plannable_type: string; plannable_date?: string | null;
-  plannable?: { id?: string; title?: string; due_at?: string | null; todo_date?: string | null; points_possible?: number | null; assignment_id?: string | null; details?: string | null };
+  plannable?: {
+    id?: string; title?: string; due_at?: string | null; todo_date?: string | null; points_possible?: number | null; assignment_id?: string | null;
+    details?: string | null; workflow_state?: string | null; sub_assignment_tag?: string | null;
+  };
   course_id?: string | null; context_name?: string; html_url?: string;
   submissions?: CanvasPlannerSubmissions | false; planner_override?: { marked_complete?: boolean; dismissed?: boolean } | null;
 }
@@ -77,7 +80,7 @@ export interface CanvasFile {
 }
 
 export interface CanvasDiscussionTopic {
-  id: string; title: string; message?: string | null; posted_at?: string | null; author?: { display_name?: string } | null;
+  id: string; title: string; message?: string | null; posted_at?: string | null; created_at?: string | null; author?: { display_name?: string } | null;
   user_name?: string | null; html_url?: string; discussion_subentry_count?: number; unread_count?: number;
   assignment_id?: string | null; todo_date?: string | null; is_announcement?: boolean; context_code?: string;
 }
