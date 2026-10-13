@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (Native — chosen for this project; the harness forbids spawning subagents unless the user asks) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **中文摘要（给 Ewan）**：共 10 个阶段、24 个任务。顺序是：基础 → Canvas 读取 → 同步 → 登录 → 服务端 → 网页（先做设置页，**做完会通知你来添加学校并登录**）→ AI 学习讲解 → 日报/周报/通知/定时 → 后台安装 → 用你的真实学校验收。每个任务都先写测试再写代码，做完提交一次。
+> **中文摘要（给 Ewan）**：共 10 个阶段、27 个任务。顺序是：基础 → Canvas 读取 → 同步 → 登录 → 服务端 → 网页（先做设置页，**做完会通知你来添加学校并登录**）→ AI 学习讲解 → 日报/周报/通知/定时 → 后台安装 → 用你的真实学校验收。每个任务都先写测试再写代码，做完提交一次。
 
 **Goal:** A local Mac web app that aggregates every Canvas course from several schools (deadlines, all course content as links, weekly AI study guides, daily/weekly reports, Mac notifications) without Canvas access tokens.
 
@@ -95,7 +95,7 @@ skill/course-hub/SKILL.md
 
 ## Phase A — Foundation
 
-### Task A1: Scaffold, config, time utilities
+### Task 1 (A1): Scaffold, config, time utilities
 
 **Files:** Create `package.json`, `tsconfig.json`, `src/config.ts`, `src/util/time.ts`, `src/util/log.ts`, `src/util/hash.ts`, `test/helpers.ts`, `test/time.test.ts`.
 
@@ -129,7 +129,7 @@ export function log(level: 'info' | 'warn' | 'error', msg: string, meta?: unknow
 - [ ] **Step 5:** `npm test` → PASS; `npm run typecheck` → clean.
 - [ ] **Step 6:** Commit `chore: scaffold project, config and time utils`.
 
-### Task A2: Database layer
+### Task 2 (A2): Database layer
 
 **Files:** Create `src/db/index.ts`, `src/db/migrations.ts`, `src/db/types.ts`, `src/db/{schools,courses,items,content,study,reports,changes,settings,runs}.ts`, `test/db.test.ts`.
 
@@ -181,7 +181,7 @@ export interface ChangeRow { id: number; school_id: string; course_id: string | 
 
 ## Phase B — Canvas access
 
-### Task B1: Cookie jar
+### Task 3 (B1): Cookie jar
 
 **Files:** Create `src/canvas/cookies.ts`, `test/cookies.test.ts`.
 
@@ -202,7 +202,7 @@ Domain rule: cookie domain with leading `.` matches host equal to it without dot
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** Run → PASS.
 - [ ] **Step 5:** Commit `feat(canvas): cookie jar`.
 
-### Task B2: Canvas HTTP client
+### Task 4 (B2): Canvas HTTP client
 
 **Files:** Create `src/canvas/client.ts`, `src/canvas/types.ts`, `test/client.test.ts`.
 
@@ -232,7 +232,7 @@ Behavior: headers `Accept: application/json+canvas-string-ids, application/json`
 - [ ] **Step 2:** FAIL. **Step 3:** Implement `client.ts` + minimal `types.ts` (Course, Assignment, Submission, PlannerItem, Module, ModuleItem, Page, File, DiscussionTopic, Quiz, CalendarEvent, Conversation, Profile, Tab). **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat(canvas): session/token HTTP client with pagination and expiry detection`.
 
-### Task B3: ICS feed parser
+### Task 5 (B3): ICS feed parser
 
 **Files:** Create `src/canvas/ics.ts`, `test/ics.test.ts`.
 
@@ -248,7 +248,7 @@ Rules: UID `event-assignment-<id>` → assignment; `event-calendar-event-<id>` �
 - [ ] **Step 2:** FAIL. **Step 3:** Implement with `ical.js` (`ICAL.parse` → `new ICAL.Component(...)` → `getAllSubcomponents('vevent')`). **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat(canvas): ICS calendar feed parser`.
 
-### Task B4: Mock Canvas server
+### Task 6 (B4): Mock Canvas server
 
 **Files:** Create `mock/server.ts`, `mock/fixtures.ts`, `mock/files.ts`, `mock/dev.ts`, `test/mock.test.ts`.
 
@@ -276,7 +276,7 @@ Mock behavior: `/login` → if `remember` cookie valid and remember enabled → 
 
 ## Phase C — Sync
 
-### Task C1: Sync core — courses and dated items
+### Task 7 (C1): Sync core — courses and dated items
 
 **Files:** Create `src/sync/{context,index,courses,items,icsMerge,changes,providers}.ts`, `src/auth/store.ts` (file-backed auth only; Chrome parts come in D1), `test/sync.test.ts`, `test/providers.test.ts`.
 
@@ -320,7 +320,7 @@ ICS merge: assignment events update `due_at` only when `apiOk=false` or the item
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. `test/providers.test.ts`: Macmillan/Gradescope/Pearson(mylab|mastering)/McGraw(connect.mheducation)/zyBooks/WebAssign/Cengage(mindtap) URLs; plain `online_upload` → canvas.
 - [ ] **Step 5:** Commit `feat(sync): courses, assignments, planner, events and ICS fallback`.
 
-### Task C2: Sync course content
+### Task 8 (C2): Sync course content
 
 **Files:** Create `src/sync/content.ts`, `src/util/html.ts` (`htmlToText` only here), `test/sync-content.test.ts`; modify `src/sync/index.ts` to call content sync per course after items.
 
@@ -340,7 +340,7 @@ export function htmlToText(html: string): string;
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat(sync): modules, pages, files metadata, announcements, discussions, inbox`.
 
-### Task C3: Week inference
+### Task 9 (C3): Week inference
 
 **Files:** Create `src/weeks/infer.ts`, `src/weeks/build.ts`, `test/weeks.test.ts`; modify `src/sync/index.ts` to call `rebuildWeeks` per course at the end.
 
@@ -362,7 +362,7 @@ export function lastWeek(db: DB, courseId: string): number | null;   // from end
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat(weeks): week numbering and module-to-week inference`.
 
-### Task C4: Slide text extraction (temporary downloads)
+### Task 10 (C4): Slide text extraction (temporary downloads)
 
 **Files:** Create `src/content/{extract,zip,textstore,download,pipeline}.ts`, `test/extract.test.ts`; modify `src/sync/index.ts` to run `extractPendingFiles(ctx, {limit: 15})` after content sync (API mode only).
 
@@ -392,7 +392,7 @@ export async function extractPendingFiles(ctx: SyncContext, opts?: { limit?: num
 
 ## Phase D — Login
 
-### Task D1: Chrome launcher, interactive login, silent re-login
+### Task 11 (D1): Chrome launcher, interactive login, silent re-login
 
 **Files:** Create `src/auth/chrome.ts`, `src/auth/login.ts`; extend `src/auth/store.ts`; Test `test/chrome/login.test.ts` (real Chrome, headless).
 
@@ -418,7 +418,7 @@ export async function silentRelogin(db: DB, schoolId: string, opts?: { timeoutMs
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat(auth): Chrome CDP login and silent re-login`.
 
-### Task D2: Wire re-login into sync and status
+### Task 12 (D2): Wire re-login into sync and status
 
 **Files:** Modify `src/sync/index.ts`: default `relogin = (id) => silentRelogin(db, id)` when `opts.relogin` is undefined (pass `relogin: null` to disable), and add `onLoginNeeded?: (school: SchoolRow) => void` to `SyncOptions` (H3 wires it to `notify(loginNeededNotice(school))`). Test `test/sync-relogin.test.ts`.
 
@@ -429,7 +429,7 @@ export async function silentRelogin(db: DB, schoolId: string, opts?: { timeoutMs
 
 ## Phase E — Server
 
-### Task E1: HTTP API
+### Task 13 (E1): HTTP API
 
 **Files:** Create `src/server/app.ts`, `src/server/security.ts`, `src/server/routes/{overview,items,courses,study,reports,schools,settings,proxy}.ts`, `src/main.ts`; extend `src/util/html.ts` with `rewriteCanvasHtml`; Test `test/api.test.ts`, `test/html.test.ts`.
 
@@ -454,7 +454,7 @@ Security (`security.ts`): Host allowlist; non-GET requires `X-CourseHub: 1`; if 
 
 > UI quality bar: load the `frontend-design` skill before F1. Chinese UI, system font stack (`-apple-system, "PingFang SC", …`), light/dark via `prefers-color-scheme`, one accent color per school, dense-but-calm list layout, every Canvas object shows an "在 Canvas 打开 ↗" link, mobile-width safe. Verify each page with `scripts/screenshot.ts` (playwright-core + installed Chrome, headless, 1280×860 and 390×844) and read the PNGs.
 
-### Task F1: Web scaffold + Settings (schools & login first)
+### Task 14 (F1): Web scaffold + Settings (schools & login first)
 
 **Files:** Create `web/index.html`, `web/vite.config.ts`, `web/tsconfig.json`, `web/src/{main.tsx,App.tsx,router.tsx,api.ts,format.ts,types.ts,styles.css}`, `web/src/components/{Layout,Tabs,Empty,StatusBadge}.tsx`, `web/src/pages/Settings.tsx`, `scripts/screenshot.ts`.
 
@@ -482,7 +482,7 @@ Settings page sections: 学校 (list with color dot, status badge 正常/需要�
 - [ ] **Step 5:** Commit `feat(web): app shell, router and settings with school login`.
 - [ ] **Step 6: CHECKPOINT (user):** start the server against the real data dir (background), `PushNotification` + message: open `http://localhost:4123/settings`, add each school, click 登录, finish SSO/Duo in the Chrome window. Continue F2 while waiting; when a school logs in, run a real sync and note issues for Task J1.
 
-### Task F2: Today & Deadlines
+### Task 15 (F2): Today & Deadlines
 
 **Files:** Create `web/src/components/{TaskRow,TaskList,MonthCalendar}.tsx`, `web/src/pages/{Today,Deadlines}.tsx`.
 
@@ -490,7 +490,7 @@ Settings page sections: 学校 (list with color dot, status badge 正常/需要�
 - Deadlines: filters (学校, 课程, 类型, 显示已完成), list grouped by local day with sticky day headers; toggle 列表/月历; month grid with colored dots per item and click-to-expand day; "无截止日期" section; "+ 手动添加任务" dialog (title, course select, date+time, link).
 - [ ] **Step 1:** Implement components/pages. **Step 2:** Build, screenshot both pages (desktop + phone width) with mock data, read PNGs, fix. **Step 3:** Commit `feat(web): today and deadlines views`.
 
-### Task F3: Courses & course detail
+### Task 16 (F3): Courses & course detail
 
 **Files:** Create `web/src/components/CanvasHtml.tsx` (DOMPurify with `ADD_ATTR: ['target']`, links already rewritten server-side; internal links use `navigate`), `web/src/pages/{Courses,CourseDetail}.tsx`.
 
@@ -502,7 +502,7 @@ Settings page sections: 学校 (list with color dot, status badge 正常/需要�
 
 ## Phase G — AI study guides
 
-### Task G1: Claude runner and serial queue
+### Task 17 (G1): Claude runner and serial queue
 
 **Files:** Create `src/ai/claude.ts`, `src/ai/queue.ts`, `test/fixtures/fake-claude.sh`, `test/claude.test.ts`.
 
@@ -524,7 +524,7 @@ export const aiQueue: SerialQueue;
 - [ ] **Step 1: Failing tests** using `COURSEHUB_CLAUDE_BIN=test/fixtures/fake-claude.sh` (echoes canned JSON chosen by env `FAKE_CLAUDE_MODE`=ok|error|ratelimit|slow and writes received argv/stdin to a file): argv contains all isolation flags and `--json-schema`; stdin equals prompt; `ok` → data parsed from `structured_output`; `ratelimit` → `rateLimited:true`; `slow` with `timeoutMs:200` → `ok:false, error` mentions timeout; an `ai_runs` row per call; queue runs jobs strictly one at a time and dedupes keys.
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. **Step 5:** Commit `feat(ai): isolated claude -p runner and serial queue`.
 
-### Task G2: Guide input, generation, syllabus schedule
+### Task 18 (G2): Guide input, generation, syllabus schedule
 
 **Files:** Create `src/ai/prompts.ts`, `src/ai/guideInput.ts`, `src/ai/guide.ts`, `src/ai/syllabus.ts`, `test/guide.test.ts`; Modify `src/server/routes/study.ts` (replace 501 stubs), `src/weeks/build.ts` (keep `week_source='syllabus'` assignments and AI topics across rebuilds; recompute other sources).
 
@@ -558,7 +558,7 @@ Study routes: `GET /api/study/:courseId` → `{course, currentWeek, weeks: [{wee
 - [ ] **Step 5:** One real run: `COURSEHUB_DATA_DIR=<qa dir> node src/cli.ts guide alpha:<id> 3` against mock data with the real `claude` (Sonnet); inspect JSON quality (Chinese, terms, sources) and tune prompts.
 - [ ] **Step 6:** Commit `feat(ai): weekly study guide generation and syllabus schedule`.
 
-### Task G3: Study UI
+### Task 19 (G3): Study UI
 
 **Files:** Create `web/src/components/Markdown.tsx` (marked → DOMPurify → KaTeX auto-render for `$…$`, `$$…$$`), `web/src/pages/{Study,StudyWeek}.tsx`.
 
@@ -570,7 +570,7 @@ Study routes: `GET /api/study/:courseId` → `{course, currentWeek, weeks: [{wee
 
 ## Phase H — Reports, notifications, scheduler
 
-### Task H1: Report data
+### Task 20 (H1): Report data
 
 **Files:** Modify `src/reports/data.ts`; Test `test/reports-data.test.ts`.
 
@@ -588,7 +588,7 @@ export function computeWeekly(db: DB, now: Date): WeeklyData;  // next = next Mo
 - [ ] **Step 1: Failing tests:** status matrix (submitted, graded, excused, canvas_done, local_done, missing, past on_paper, overdue, todo, event); **Review Focus 3:** item due `2026-11-02T07:59:00Z` with now `2026-11-01T16:00:00Z` → in `dueToday`; item due `2026-11-03T07:59:00Z` → in `next3Days`; hidden courses excluded; done items excluded from todo groups; weekly `next.days` has 7 consecutive dates across the DST change; `busiest` = day with max minutes.
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. **Step 5:** Commit `feat(reports): deterministic daily and weekly data`.
 
-### Task H2: Report generation + Reports UI
+### Task 21 (H2): Report generation + Reports UI
 
 **Files:** Create `src/reports/daily.ts`, `src/reports/weekly.ts`, `web/src/pages/{Reports,ReportView}.tsx`; Modify `src/server/routes/reports.ts`, `web/src/pages/Today.tsx` (daily card); Test `test/reports-gen.test.ts`.
 
@@ -605,7 +605,7 @@ AI prompts get a compact JSON of the data with local times pre-formatted; schema
 - [ ] **Step 3:** UI: Reports list (日报/周报 tabs, date, headline), ReportView (daily: headline, 今日安排 blocks with linked tasks, deterministic sections with links; weekly: 回顾, 下周每日, 考试预警, 学习主题, 建议), Today daily card. Build + screenshots + fix.
 - [ ] **Step 4:** Commit `feat(reports): daily/weekly generation with AI plan and report pages`.
 
-### Task H3: Notifications and reminders
+### Task 22 (H3): Notifications and reminders
 
 **Files:** Create `src/notify/mac.ts`, `src/notify/reminders.ts`, `src/notify/changes.ts`, `notifier/notifier.applescript`; Test `test/notify.test.ts`.
 
@@ -624,7 +624,7 @@ Applet (`notifier.applescript`): on run → if `pending.txt` exists: read, delet
 - [ ] **Step 3:** Manual: build the applet, send one real notice, confirm banner shows "Course Hub" and clicking opens the URL (approve the macOS permission prompt; if the user must click Allow, note it for the final report).
 - [ ] **Step 4:** Commit `feat(notify): mac notifications, due reminders and change alerts`.
 
-### Task H4: Scheduler
+### Task 23 (H4): Scheduler
 
 **Files:** Create `src/scheduler.ts`; Modify `src/main.ts` (start scheduler, resume queued guides); Test `test/scheduler.test.ts`.
 
@@ -649,7 +649,7 @@ Ticks are serialized (a running job is not started twice); job errors recorded i
 
 ## Phase I — Ops
 
-### Task I1: CLI
+### Task 24 (I1): CLI
 
 **Files:** Create `src/cli.ts`, `bin/coursehub`; Test `test/cli.test.ts`.
 
@@ -657,7 +657,7 @@ Commands: `status` (schools + last sync + counts), `sync [schoolId]`, `login <sc
 - [ ] **Step 1: Failing tests:** `tasks --json --days 3` prints valid JSON array with TaskView fields; unknown command → exit 2 with usage; `study` for a missing guide prints "还没有生成".
 - [ ] **Step 2:** FAIL → implement → PASS. **Step 3:** Commit `feat(cli): coursehub command line`.
 
-### Task I2: Install, LaunchAgent, Claude Code skill
+### Task 25 (I2): Install, LaunchAgent, Claude Code skill
 
 **Files:** Create `scripts/install.sh`, `scripts/uninstall.sh`, `launchd/com.coursehub.server.plist.tmpl`, `skill/course-hub/SKILL.md`; Modify `.gitignore` (`notifier/*.app`).
 
@@ -665,7 +665,7 @@ Commands: `status` (schools + last sync + counts), `sync [schoolId]`, `login <sc
 SKILL.md: when to use (deadlines, "这周/今天要做什么", course content, "讲讲 X 第 N 周"), commands (`coursehub tasks --json --days 7`, `coursehub courses --json`, `coursehub study <courseId> <week> --json`, `coursehub sync`), answer in Chinese, always show due dates exactly as returned, link Canvas URLs.
 - [ ] **Step 1:** Write files. **Step 2:** Run install; verify `launchctl print gui/$(id -u)/com.coursehub.server` running, `curl 127.0.0.1:4123/api/health`, kill the node process → relaunched by launchd within 10s. **Step 3:** Commit `feat(ops): installer, LaunchAgent and Claude Code skill`.
 
-### Task I3: Full QA pass (mock schools)
+### Task 26 (I3): Full QA pass (mock schools)
 
 - [ ] **Step 1:** Fresh QA data dir, `mock/dev.ts` running, add both mock schools via UI, login via the real Chrome window flow (headed) to validate UX, full sync.
 - [ ] **Step 2:** Generate 2 guides with real `claude` (Sonnet), daily + weekly reports with real AI.
@@ -677,7 +677,7 @@ SKILL.md: when to use (deadlines, "这周/今天要做什么", course content, "
 
 ## Phase J — Real schools
 
-### Task J1: Verify with the user's schools
+### Task 27 (J1): Verify with the user's schools
 
 - [ ] **Step 1:** For each school the user added: confirm login state, run sync, compare counts with what Canvas shows (courses, upcoming assignments, missing), check ICS URL saved.
 - [ ] **Step 2:** Fix real-world mismatches (record each as a regression test with a sanitized fixture added to `mock/fixtures.ts`).
