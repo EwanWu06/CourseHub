@@ -35,15 +35,23 @@ export function backupDb(db: DB, now: Date, keep = 14): string | null {
   return file;
 }
 
-export function checkDatabase(file: string): 'ok' | 'missing' | 'corrupt' {
+const SQLITE_CORRUPT = 11;
+const SQLITE_NOTADB = 26;
+
+/**
+ * 'corrupt' only when SQLite itself says so (SQLITE_CORRUPT / SQLITE_NOTADB, or quick_check fails). Anything else —
+ * locked, a permissions hiccup — is 'unreadable': never a reason to swap in an older backup.
+ */
+export function checkDatabase(file: string): 'ok' | 'missing' | 'corrupt' | 'unreadable' {
   if (!existsSync(file)) return 'missing';
   let db: DatabaseSync | null = null;
   try {
     db = new DatabaseSync(file, { readOnly: true });
     const row = db.prepare('PRAGMA quick_check').get() as Record<string, unknown> | undefined;
     return row && Object.values(row)[0] === 'ok' ? 'ok' : 'corrupt';
-  } catch {
-    return 'corrupt';
+  } catch (err) {
+    const code = (err as { errcode?: number }).errcode;
+    return code === SQLITE_CORRUPT || code === SQLITE_NOTADB ? 'corrupt' : 'unreadable';
   } finally {
     db?.close();
   }

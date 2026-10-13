@@ -40,9 +40,12 @@ if (existing === 'other') {
 cleanTmp();
 // A damaged database is set aside and the newest good daily backup restored before anything opens it.
 let repaired: { restored: string | null } | null = null;
-if (checkDatabase(paths().db) === 'corrupt') {
+const dbState = checkDatabase(paths().db);
+if (dbState === 'corrupt') {
   repaired = repairFromBackup(paths().db);
   log('error', `database was damaged; restored from ${repaired.restored ?? '(no backup — starting fresh)'}`);
+} else if (dbState === 'unreadable') {
+  log('warn', 'database could not be checked right now (locked or permissions); leaving it as it is');
 }
 const db = openDb();
 setNoticeRecorder((n) => recordNotice(db, n));

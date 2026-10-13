@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, readdirSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpDataDir } from './helpers.ts';
 import { paths } from '../src/config.ts';
@@ -48,4 +48,19 @@ test('with no backup at all the damaged file is still moved aside so a fresh dat
   const r = repairFromBackup(paths().db);
   assert.equal(r.restored, null);
   assert.equal(checkDatabase(paths().db), 'missing');
+});
+
+test('a database that merely can\'t be opened right now is never treated as damaged', () => {
+  tmpDataDir();
+  const db = openDb();
+  createSchool(db, { name: 'Alpha', base_url: 'alpha.instructure.com' });
+  backupDb(db, new Date('2026-10-12T20:00:00Z'));
+  db.close();
+  chmodSync(paths().db, 0o000); // e.g. a permissions hiccup: not corruption
+  try {
+    assert.equal(checkDatabase(paths().db), 'unreadable');
+  } finally {
+    chmodSync(paths().db, 0o644);
+  }
+  assert.equal(checkDatabase(paths().db), 'ok');
 });
