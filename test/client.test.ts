@@ -114,17 +114,46 @@ test('rate-limited 403 is retried after a backoff sleep', async () => {
   });
 });
 
-test('5xx responses are retried twice', async () => {
+test('5xx responses are retried three times, waiting longer each time', async () => {
   let calls = 0;
   const sleeps: number[] = [];
   await withServer((_req, res) => {
     calls++;
-    if (calls < 3) { json(res, 502, { error: 'bad gateway' }); return; }
+    if (calls < 4) { json(res, 502, { error: 'bad gateway' }); return; }
     json(res, 200, [1]);
   }, async (url) => {
     const c = new CanvasClient({ baseUrl: url, auth: { kind: 'session', jar: sessionJar(), userAgent: UA }, sleep: async (ms) => { sleeps.push(ms); } });
     assert.deepEqual(await c.get('/api/v1/x'), [1]);
-    assert.deepEqual(sleeps, [500, 1500]);
+    assert.deepEqual(sleeps, [500, 2000, 6000]);
+  });
+});
+
+test('429 Too Many Requests waits as long as Retry-After says (capped)', async () => {
+  let calls = 0;
+  const sleeps: number[] = [];
+  await withServer((_req, res) => {
+    calls++;
+    if (calls === 1) { json(res, 429, { error: 'slow down' }, { 'Retry-After': '3' }); return; }
+    if (calls === 2) { json(res, 429, { error: 'slow down' }, { 'Retry-After': '9999' }); return; }
+    json(res, 200, [2]);
+  }, async (url) => {
+    const c = new CanvasClient({ baseUrl: url, auth: { kind: 'session', jar: sessionJar(), userAgent: UA }, sleep: async (ms) => { sleeps.push(ms); } });
+    assert.deepEqual(await c.get('/api/v1/x'), [2]);
+    assert.deepEqual(sleeps, [3000, 30000]);
+  });
+});
+
+test('downloads are retried after a server hiccup', async () => {
+  let calls = 0;
+  await withServer((_req, res) => {
+    calls++;
+    if (calls === 1) { res.writeHead(503); res.end('busy'); return; }
+    res.writeHead(200, { 'Content-Type': 'application/pdf' });
+    res.end('PDF');
+  }, async (url) => {
+    const c = new CanvasClient({ baseUrl: url, auth: { kind: 'session', jar: sessionJar(), userAgent: UA }, sleep: noSleep });
+    assert.equal(await (await c.fetchRaw(`${url}/files/1/download`)).text(), 'PDF');
+    assert.equal(calls, 2);
   });
 });
 

@@ -22,6 +22,7 @@ import { weeklyPeriod } from './reports/data.ts';
 import { generateDaily } from './reports/daily.ts';
 import { generateWeekly } from './reports/weekly.ts';
 import { log } from './util/log.ts';
+import { waitForNetwork } from './util/network.ts';
 import { localDateStr } from './util/time.ts';
 
 export interface Slot { hour: number; minute: number; weekday?: number /* 0 = Sunday */ }
@@ -54,7 +55,15 @@ export function isIntervalDue(now: Date, lastRun: Date | null, hours: number, wi
   return !lastRun || now.getTime() - lastRun.getTime() >= hours * 3_600_000 - 30_000;
 }
 
-export interface Job { name: string; isDue(now: Date, lastRun: Date | null, s: Settings): boolean; run(now: Date): Promise<void> }
+export interface Job {
+  name: string;
+  isDue(now: Date, lastRun: Date | null, s: Settings): boolean;
+  run(now: Date): Promise<void>;
+  /** a hung job is abandoned after this long so the rest of the schedule keeps running (default 30 min) */
+  timeoutMs?: number;
+}
+
+const DEFAULT_JOB_TIMEOUT = 30 * 60_000;
 
 export function createScheduler(db: DB, jobs: Job[], opts: { tickMs?: number; clock?: () => Date; settings?: () => Settings } = {}) {
   const clock = opts.clock ?? (() => new Date());
@@ -64,12 +73,21 @@ export function createScheduler(db: DB, jobs: Job[], opts: { tickMs?: number; cl
 
   async function runJob(job: Job, now: Date): Promise<void> {
     setJob(db, job.name, { last_run_at: now.toISOString(), last_status: 'running' });
+    const limit = job.timeoutMs ?? DEFAULT_JOB_TIMEOUT;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await job.run(now);
+      const running = job.run(now);
+      running.catch(() => undefined); // if abandoned, a late failure must not become an unhandled rejection
+      await Promise.race([
+        running,
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`超时（超过 ${Math.round(limit / 60_000) || 1} 分钟没完成）`)), limit); }),
+      ]);
       setJob(db, job.name, { last_status: 'ok', last_error: null });
     } catch (err) {
       setJob(db, job.name, { last_status: 'error', last_error: String((err as Error)?.message ?? err).slice(0, 500) });
       log('error', `job ${job.name} failed`, err);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -121,7 +139,18 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
   const weekly = deps.generateWeekly ?? ((now: Date) => generateWeekly(db, { now, notify: true }));
   const reminders = deps.runReminders ?? ((now: Date) => runReminders(db, now));
   const changes = deps.flushChanges ?? ((now: Date) => flushChangeNotices(db, now));
+  const networkReady = async () => {
+    const hosts = listSchools(db).flatMap((s) => {
+      try {
+        return [new URL(s.base_url).hostname];
+      } catch {
+        return [];
+      }
+    });
+    if (!(await waitForNetwork(hosts))) log('warn', 'network still unreachable after waiting; trying anyway');
+  };
   const syncNow = async (now: Date) => {
+    await networkReady();
     await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
     await changes(now);
     // Re-read syllabi whose sources changed (the analysis itself skips unchanged input), keep guides queued.
@@ -131,13 +160,16 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
   return [
     {
       name: 'keepalive', // every 30 minutes, day and night, while the Mac is awake
+      timeoutMs: 15 * 60_000,
       isDue: (now, last) => isIntervalDue(now, last, 0.5, { start: 0, end: 24 }),
       run: async () => {
+        await networkReady();
         await keepAliveAll(db, { onLoginNeeded: deps.onLoginNeeded });
       },
     },
     {
       name: 'daily', // settings.dailyTime (07:00); after sleep it runs once on wake. Always syncs first.
+      timeoutMs: 40 * 60_000,
       isDue: (now, last, s) => isSlotDue(now, last, parseHHMM(s.dailyTime)) && !getReport(db, `daily:${localDateStr(now)}`),
       run: async (now) => {
         await syncNow(now);
@@ -147,6 +179,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     },
     {
       name: 'weekly', // settings.weeklyDay + weeklyTime (Sunday 20:00), caught up once after sleep
+      timeoutMs: 20 * 60_000,
       isDue: (now, last, s) => isSlotDue(now, last, { ...parseHHMM(s.weeklyTime), weekday: s.weeklyDay }) && !getReport(db, `weekly:${weeklyPeriod(now)}`),
       run: async (now) => {
         await weekly(now);
@@ -154,11 +187,13 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     },
     {
       name: 'sync',
+      timeoutMs: 40 * 60_000,
       isDue: (now, last, s) => isIntervalDue(now, last, s.syncIntervalHours, { start: s.syncWindowStart, end: s.syncWindowEnd }),
       run: syncNow,
     },
     {
       name: 'reminders', // every 15 minutes: deadline/exam reminders, and alerts for changes found by manual syncs
+      timeoutMs: 5 * 60_000,
       isDue: (now, last) => isIntervalDue(now, last, 0.25, { start: 0, end: 24 }),
       run: async (now) => {
         await reminders(now);
@@ -167,6 +202,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     },
     {
       name: 'guides', // keep "this week + next week" study guides ready (only re-runs when material changed)
+      timeoutMs: 2 * 60_000,
       isDue: (now, last, s) => isIntervalDue(now, last, 0.5, { start: s.syncWindowStart, end: s.syncWindowEnd }),
       run: async (now) => {
         autoEnqueueGuides(db, now);
@@ -174,6 +210,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     },
     {
       name: 'sso-refresh', // daily at noon: keep each school's SSO "remember me" fresh
+      timeoutMs: 20 * 60_000,
       isDue: (now, last) => isSlotDue(now, last, { hour: 12, minute: 0 }),
       run: async () => {
         for (const s of listSchools(db)) {
@@ -185,6 +222,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     },
     {
       name: 'cleanup',
+      timeoutMs: 10 * 60_000,
       isDue: (now, last) => isSlotDue(now, last, { hour: 3, minute: 0 }),
       run: async () => {
         cleanTmp();

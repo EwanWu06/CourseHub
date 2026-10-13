@@ -147,3 +147,20 @@ test('the schedule does not remake a report that already exists for its day or w
   await sunday.tick();
   assert.deepEqual(calls, ['sync', 'daily', 'weekly'], 'Sunday evening makes next week\'s report');
 });
+
+test('a job that hangs is cut off at its time limit; the rest of the tick and later ticks still run', { timeout: 5000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const ran: string[] = [];
+  const jobs: Job[] = [
+    { name: 'stuck', timeoutMs: 50, isDue: () => true, run: () => new Promise<void>(() => {}) },
+    { name: 'after', isDue: () => true, run: async () => { ran.push('after'); } },
+  ];
+  const s = createScheduler(db, jobs, { clock: () => new Date(), settings: () => DEFAULT_SETTINGS });
+  await s.tick();
+  assert.deepEqual(ran, ['after']);
+  assert.equal(getJob(db, 'stuck')!.last_status, 'error');
+  assert.match(getJob(db, 'stuck')!.last_error!, /超时/);
+  await s.tick();
+  assert.deepEqual(ran, ['after', 'after'], 'the scheduler is not wedged');
+});

@@ -1,8 +1,9 @@
 // Saved login state per school: cookies captured from Chrome (all domains, so SSO cookies survive too)
 // or a personal access token for the few schools that still allow one. Files are chmod 600.
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config.ts';
+import { writeFileAtomic } from '../util/fs.ts';
 import { CanvasClient } from '../canvas/client.ts';
 import type { ClientOptions } from '../canvas/client.ts';
 import { CookieJar } from '../canvas/cookies.ts';
@@ -24,8 +25,7 @@ export function loadAuth(schoolId: string): AuthFile | null {
 export function saveAuth(a: AuthFile): void {
   mkdirSync(paths().auth, { recursive: true, mode: 0o700 });
   const file = authPath(a.schoolId);
-  writeFileSync(file, JSON.stringify(a, null, 2), { mode: 0o600 });
-  chmodSync(file, 0o600);
+  writeFileAtomic(file, JSON.stringify(a, null, 2), 0o600);
 }
 
 export function deleteAuth(schoolId: string): void {

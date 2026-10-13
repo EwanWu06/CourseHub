@@ -1,10 +1,11 @@
 // macOS notifications. Delivered through the small "Course Hub" applet (notifier/), so banners carry our name and
 // clicking one opens the page it is about; plain osascript when the applet isn't built. Serialized, ≥2 s apart.
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { PORT, ROOT_DIR, paths } from '../config.ts';
+import { writeFileAtomic } from '../util/fs.ts';
 import { log } from '../util/log.ts';
 
 const execFileAsync = promisify(execFile);
@@ -35,7 +36,7 @@ async function viaApplet(n: Notice): Promise<boolean> {
   if (!existsSync(NOTIFIER_APP) || paths().notify !== path.join(ROOT_DIR, 'data', 'notify')) return false;
   mkdirSync(paths().notify, { recursive: true });
   const file = path.join(paths().notify, 'pending.txt');
-  writeFileSync(file, pendingText(n));
+  writeFileAtomic(file, pendingText(n));
   await execFileAsync('/usr/bin/open', ['-g', '-a', NOTIFIER_APP], { timeout: 10_000 });
   // wait until the applet has taken it, so the next notice can't overwrite this one
   for (let i = 0; i < 50 && existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));

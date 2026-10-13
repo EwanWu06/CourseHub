@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import { PORT } from '../config.ts';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { PORT, ROOT_DIR } from '../config.ts';
 import type { DB } from '../db/index.ts';
 import type { ReportRow } from '../db/types.ts';
 import type { interactiveLogin } from '../auth/login.ts';
@@ -18,6 +20,15 @@ import { registerStudy } from './routes/study.ts';
 import { makeSyncStarter, registerSync } from './routes/sync.ts';
 import type { SyncHandle } from './routes/sync.ts';
 import { HttpError } from './routes/util.ts';
+
+const STARTED_AT = new Date().toISOString();
+const VERSION = (() => {
+  try {
+    return (JSON.parse(readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')) as { version?: string }).version ?? '0';
+  } catch {
+    return '0';
+  }
+})();
 
 export interface AppDeps {
   startLogin?: typeof interactiveLogin;
@@ -38,7 +49,7 @@ export function createApp(db: DB, deps: AppDeps = {}): Hono {
   });
 
   const starter = deps.starter ?? makeSyncStarter(db, deps.runSync, deps.syncOptions);
-  app.get('/api/health', (c) => c.json({ ok: true }));
+  app.get('/api/health', (c) => c.json({ ok: true, app: 'course-hub', version: VERSION, pid: process.pid, startedAt: STARTED_AT }));
   registerOverview(app, db);
   registerItems(app, db);
   registerCourses(app, db);

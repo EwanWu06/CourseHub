@@ -88,7 +88,8 @@ class Semaphore {
   }
 }
 
-const RETRY_5XX = [500, 1500];
+const RETRY_5XX = [500, 2000, 6000]; // network errors and 5xx: ~8.5 s in all, enough for Wi-Fi coming back after sleep
+const MAX_RETRY_AFTER_MS = 30_000;
 
 export class CanvasClient {
   readonly baseUrl: string;
@@ -140,9 +141,26 @@ export class CanvasClient {
   async fetchRaw(url: string): Promise<Response> {
     return this.sem.run(async () => {
       let current = url;
+      let retries = 0;
       for (let hop = 0; hop < 6; hop++) {
-        const res = await this.send(current);
+        let res: Response;
+        try {
+          res = await this.send(current);
+        } catch (err) {
+          if (retries < RETRY_5XX.length) {
+            await this.sleep(RETRY_5XX[retries++]);
+            hop--;
+            continue;
+          }
+          throw new CanvasHttpError(0, current, `网络错误: ${(err as Error).message}`);
+        }
         this.requestCount++;
+        if (res.status >= 500 && retries < RETRY_5XX.length) {
+          await res.body?.cancel();
+          await this.sleep(RETRY_5XX[retries++]);
+          hop--;
+          continue;
+        }
         this.absorbCookies(current, res);
         if (res.status >= 300 && res.status < 400) {
           const loc = res.headers.get('location');
@@ -233,6 +251,12 @@ export class CanvasClient {
           throw new CanvasForbiddenError(403, url);
         }
         if (res.status === 404) throw new CanvasNotFoundError(url);
+        if (res.status === 429 && rateRetries < 3) {
+          const after = Number(res.headers.get('retry-after'));
+          await this.sleep(Math.min(MAX_RETRY_AFTER_MS, after > 0 ? after * 1000 : 2000 * 2 ** rateRetries));
+          rateRetries++;
+          continue;
+        }
         if (res.status >= 500) {
           if (serverRetries < RETRY_5XX.length) {
             await this.sleep(RETRY_5XX[serverRetries++]);

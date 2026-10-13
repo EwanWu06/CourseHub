@@ -70,7 +70,10 @@ async function json<T = any>(res: Response): Promise<T> {
 }
 
 test('health answers on the loopback host only', async () => {
-  assert.deepEqual(await json(await call('/api/health')), { ok: true });
+  const health = await json(await call('/api/health'));
+  assert.equal(health.ok, true);
+  assert.equal(health.app, 'course-hub');
+  assert.equal(typeof health.startedAt, 'string');
   assert.equal((await call('/api/health', { host: 'evil.com:4123' })).status, 403);
   assert.equal((await call('/api/health', { host: 'localhost:4123' })).status, 200);
 });
