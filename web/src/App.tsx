@@ -2,14 +2,16 @@ import type { ReactNode } from 'react';
 import { Layout } from './components/Layout.tsx';
 import { Placeholder } from './pages/Placeholder.tsx';
 import { Settings } from './pages/Settings.tsx';
+import { Today } from './pages/Today.tsx';
+import { Deadlines } from './pages/Deadlines.tsx';
 import { matchRoute } from './route-match.ts';
 import { useLocation } from './router.tsx';
 
 type Route = { pattern: string; render: (p: Record<string, string>) => ReactNode };
 
 const ROUTES: Route[] = [
-  { pattern: '/', render: () => <Placeholder title="今天" kicker="Today" /> },
-  { pattern: '/deadlines', render: () => <Placeholder title="截止日期" kicker="Deadlines" /> },
+  { pattern: '/', render: () => <Today /> },
+  { pattern: '/deadlines', render: () => <Deadlines /> },
   { pattern: '/courses', render: () => <Placeholder title="课程" kicker="Courses" /> },
   { pattern: '/courses/:id/:tab?/:sub?', render: () => <Placeholder title="课程" kicker="Course" /> },
   { pattern: '/study', render: () => <Placeholder title="学习" kicker="Study" /> },
