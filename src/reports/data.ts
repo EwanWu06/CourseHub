@@ -1,10 +1,17 @@
 // Deterministic task views shared by the API, the daily/weekly reports and notifications.
 // Everything here comes straight from Canvas data — nothing is AI-generated.
 import type { DB } from '../db/index.ts';
+import { changesSince } from '../db/changes.ts';
 import { listCourses } from '../db/courses.ts';
+import { getItem, listItems } from '../db/items.ts';
 import { listSchools } from '../db/schools.ts';
+import { all, one } from '../db/sql.ts';
+import { getGuide, listWeeks } from '../db/study.ts';
 import type { ItemKind, ItemRow } from '../db/types.ts';
 import { courseDisplayName } from '../util/course.ts';
+import { addDays, atLocal, localDateStr, mondayOf } from '../util/time.ts';
+import { weekOf } from '../weeks/infer.ts';
+import { currentWeek, lastWeek } from '../weeks/build.ts';
 
 export type TaskStatus = 'done' | 'todo' | 'overdue' | 'missing' | 'past' | 'event';
 
@@ -84,4 +91,178 @@ export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
 
 export function toTaskView(db: DB, row: ItemRow, now: Date): TaskView {
   return makeTaskViewer(db, now)(row);
+}
+
+// ---- Daily and weekly report data ----
+
+const DAY = 86_400_000;
+
+export interface DailyData {
+  date: string;
+  overdue: TaskView[]; dueToday: TaskView[]; next3Days: TaskView[]; laterThisWeek: TaskView[]; eventsToday: TaskView[];
+  examsSoon: TaskView[];
+  announcements: { id: string; courseName: string; title: string; postedAt: string; htmlUrl: string }[];
+  grades: { itemId: string; title: string; courseName: string; score: number | null; points: number | null }[];
+  dueChanges: { itemId: string; title: string; courseName: string; from: string | null; to: string | null }[];
+  loginNeeded: { schoolId: string; name: string }[];
+  studyFocus: { courseId: string; courseName: string; week: number; overview: string | null; status: string | null }[];
+  totals: { todo: number; minutes: number };
+}
+
+export interface WeeklyData {
+  weekStart: string; weekEnd: string;
+  last: { onTime: number; late: number; missing: number; graded: { title: string; courseName: string; score: number | null; points: number | null }[] };
+  next: {
+    days: { date: string; items: TaskView[]; minutes: number }[];
+    exams: TaskView[];
+    topics: { courseId: string; courseName: string; week: number; title: string | null; topics: string[]; overview: string | null }[];
+  };
+  busiest: string | null;
+}
+
+const midnight = (date: string) => atLocal(date, 0, 0).getTime();
+const open = (t: TaskView) => t.status === 'todo' || t.status === 'overdue' || t.status === 'missing';
+const dueIn = (from: number, to: number) => (t: TaskView) => {
+  const x = Date.parse(t.dueAt!);
+  return x >= from && x < to;
+};
+const minutesOf = (ts: TaskView[]) => ts.reduce((n, t) => n + t.estMinutes, 0);
+
+/** "What's new" starts at the previous day's report (an earlier run today doesn't count), else 24 hours ago. */
+function dailySince(db: DB, now: Date): string {
+  const prev = one<{ created_at: string }>(db, `SELECT created_at FROM reports WHERE type = 'daily' AND period < $today
+      ORDER BY period DESC, created_at DESC LIMIT 1`, { today: localDateStr(now) });
+  return prev?.created_at ?? new Date(now.getTime() - DAY).toISOString();
+}
+
+function guideOverview(db: DB, courseId: string, week: number): { overview: string | null; status: string | null } {
+  const g = getGuide(db, courseId, week);
+  if (!g) return { overview: null, status: null };
+  let overview: string | null = null;
+  if (g.status === 'ready' && g.content) {
+    try {
+      overview = (JSON.parse(g.content) as { overview?: string }).overview ?? null;
+    } catch {
+      overview = null;
+    }
+  }
+  return { overview, status: g.status };
+}
+
+/** Grade and due-date changes since `since`, for visible courses, one entry per item (latest wins; due keeps the first "from"). */
+function itemChanges(db: DB, since: string, until: string | null) {
+  const visible = new Map(listCourses(db).map((c) => [c.id, courseDisplayName(c)]));
+  const grades = new Map<string, DailyData['grades'][number]>();
+  const dues = new Map<string, DailyData['dueChanges'][number]>();
+  for (const ch of changesSince(db, since)) {
+    if (until && ch.created_at >= until) continue;
+    if (ch.course_id && !visible.has(ch.course_id)) continue;
+    const item = getItem(db, ch.ref_id);
+    const title = item?.title ?? ch.summary;
+    const courseName = (ch.course_id && visible.get(ch.course_id)) || '';
+    let data: { score?: number | null; points?: number | null; from?: string | null; to?: string | null } = {};
+    try {
+      data = JSON.parse(ch.data) as typeof data;
+    } catch {
+      data = {};
+    }
+    if (ch.kind === 'graded') {
+      grades.set(ch.ref_id, { itemId: ch.ref_id, title, courseName, score: data.score ?? item?.score ?? null, points: data.points ?? item?.points ?? null });
+    } else if (ch.kind === 'due_changed') {
+      const earlier = dues.get(ch.ref_id);
+      dues.set(ch.ref_id, { itemId: ch.ref_id, title, courseName, from: earlier ? earlier.from : data.from ?? null, to: data.to ?? null });
+    }
+  }
+  return { grades: [...grades.values()], dueChanges: [...dues.values()] };
+}
+
+export function computeDaily(db: DB, now: Date): DailyData {
+  const view = makeTaskViewer(db, now);
+  const today = localDateStr(now);
+  const t0 = midnight(today);
+  const t1 = midnight(addDays(today, 1));
+  const t4 = midnight(addDays(today, 4));
+  const tWeek = midnight(addDays(mondayOf(today), 7));
+  const tasks = listItems(db, { from: new Date(now.getTime() - 30 * DAY).toISOString(), to: new Date(Math.max(t4, tWeek)).toISOString() }).map(view);
+  const work = tasks.filter((t) => t.status !== 'event');
+
+  const overdue = work.filter((t) => Date.parse(t.dueAt!) < t0 && (t.status === 'overdue' || t.status === 'missing'));
+  const dueToday = work.filter(dueIn(t0, t1)).filter(open);
+  const next3Days = work.filter(dueIn(t1, t4)).filter(open);
+  const laterThisWeek = work.filter(dueIn(t4, tWeek)).filter(open);
+  const eventsToday = tasks.filter((t) => t.status === 'event').filter(dueIn(t0, t1));
+  const examsSoon = listItems(db, { from: now.toISOString(), to: new Date(now.getTime() + 14 * DAY).toISOString() })
+    .map(view).filter((t) => isExamLike(t.title, t.category) && t.status !== 'done');
+
+  const since = dailySince(db, now);
+  const announcements = all<{ id: string; title: string; posted: string; html_url: string; name: string; code: string | null; nickname: string | null }>(db, `
+      SELECT t.id, t.title, COALESCE(t.posted_at, t.first_seen_at) AS posted, t.html_url, c.name, c.code, c.nickname
+      FROM topics t JOIN courses c ON c.id = t.course_id
+      WHERE t.kind = 'announcement' AND c.hidden = 0 AND c.active = 1 AND COALESCE(t.posted_at, t.first_seen_at) >= $since
+      ORDER BY posted DESC LIMIT 20`, { since })
+    .map((a) => ({ id: a.id, courseName: courseDisplayName(a), title: a.title, postedAt: a.posted, htmlUrl: a.html_url }));
+
+  const studyFocus: DailyData['studyFocus'] = [];
+  for (const c of listCourses(db)) {
+    const week = currentWeek(db, c.id, now);
+    const last = lastWeek(db, c.id);
+    if (week === null || last === null || week < 1 || week > last) continue;
+    studyFocus.push({ courseId: c.id, courseName: courseDisplayName(c), week, ...guideOverview(db, c.id, week) });
+  }
+
+  const todo = [...overdue, ...dueToday, ...next3Days, ...laterThisWeek];
+  return {
+    date: today, overdue, dueToday, next3Days, laterThisWeek, eventsToday, examsSoon, announcements,
+    ...itemChanges(db, since, null),
+    loginNeeded: listSchools(db).filter((s) => s.status === 'needs_login').map((s) => ({ schoolId: s.id, name: s.name })),
+    studyFocus,
+    totals: { todo: todo.length, minutes: minutesOf(todo) },
+  };
+}
+
+/** On Sunday the weekly report looks at the coming week; any other day, at the current one. */
+export function computeWeekly(db: DB, now: Date): WeeklyData {
+  const view = makeTaskViewer(db, now);
+  const today = localDateStr(now);
+  const monday = mondayOf(today);
+  const weekStart = today === addDays(monday, 6) ? addDays(monday, 7) : monday;
+  const weekEnd = addDays(weekStart, 6);
+  const lastStart = addDays(weekStart, -7);
+
+  const rows = listItems(db, { from: new Date(midnight(weekStart)).toISOString(), to: new Date(midnight(addDays(weekStart, 7))).toISOString() }).map(view);
+  const relevant = rows.filter((t) => t.status !== 'done' && (t.status !== 'event' || isExamLike(t.title, t.category)));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((date) => {
+    const items = relevant.filter(dueIn(midnight(date), midnight(addDays(date, 1))));
+    return { date, items, minutes: minutesOf(items) };
+  });
+  const exams = relevant.filter((t) => isExamLike(t.title, t.category));
+  const max = Math.max(0, ...days.map((d) => d.minutes));
+  const busiest = max > 0 ? days.find((d) => d.minutes === max)!.date : null;
+
+  const lastItems = listItems(db, { from: new Date(midnight(lastStart)).toISOString(), to: new Date(midnight(weekStart)).toISOString() })
+    .filter((r) => r.kind !== 'event' && r.kind !== 'note').map((r) => ({ row: r, view: view(r) }));
+  const graded = itemChanges(db, new Date(midnight(lastStart)).toISOString(), new Date(midnight(weekStart)).toISOString()).grades
+    .map(({ title, courseName, score, points }) => ({ title, courseName, score, points }));
+
+  const topics: WeeklyData['next']['topics'] = [];
+  for (const c of listCourses(db)) {
+    if (!c.week1) continue;
+    const week = weekOf(c.week1, atLocal(weekStart, 12, 0).toISOString());
+    const row = listWeeks(db, c.id).find((w) => w.week === week);
+    if (!row) continue;
+    const entry = { courseId: c.id, courseName: courseDisplayName(c), week, title: row.title, topics: JSON.parse(row.topics) as string[], overview: guideOverview(db, c.id, week).overview };
+    if (entry.title || entry.topics.length || entry.overview) topics.push(entry); // nothing known about that week → leave it out
+  }
+
+  return {
+    weekStart, weekEnd,
+    last: {
+      onTime: lastItems.filter((x) => x.view.status === 'done' && !x.row.late).length,
+      late: lastItems.filter((x) => x.view.status === 'done' && !!x.row.late).length,
+      missing: lastItems.filter((x) => x.view.status === 'missing' || x.view.status === 'overdue').length,
+      graded,
+    },
+    next: { days, exams, topics },
+    busiest,
+  };
 }
