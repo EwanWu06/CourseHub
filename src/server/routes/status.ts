@@ -50,42 +50,43 @@ export function statusIssues(x: IssueInput): Issue[] {
   return out;
 }
 
-export function registerStatus(app: Hono, db: DB): void {
-  app.get('/api/status', (c) => {
-    const now = new Date();
-    const schools = listSchools(db).map((s) => {
-      const run = recentSyncRuns(db, 1, s.id)[0];
-      return {
-        id: s.id, name: s.name, color: s.color, status: s.status, statusDetail: s.status_detail, authMode: s.auth_mode,
-        loginAt: s.login_at, aliveAt: s.alive_at, renewals: s.renewals, lastSyncAt: s.last_sync_at, lastOkAt: s.last_ok_at,
-        icsFallback: !!s.ics_url, lastRun: run ? { status: run.status, error: run.error, finishedAt: run.finished_at } : null,
-      };
-    });
-    const jobs = Object.entries(JOB_LABELS).map(([name, label]) => {
-      const j = getJob(db, name);
-      return { name, label, lastRunAt: j?.last_run_at ?? null, lastStatus: j?.last_status ?? null, lastError: j?.last_error ?? null };
-    });
-    const since = atLocal(localDateStr(now), 0, 0).toISOString();
-    const today = one<{ calls: number; failed: number | null; input: number | null; output: number | null }>(db,
-      'SELECT count(*) AS calls, sum(ok = 0) AS failed, sum(input_tokens) AS input, sum(output_tokens) AS output FROM ai_runs WHERE started_at >= $since', { since })!;
-    const last = one<AiRunRow>(db, 'SELECT * FROM ai_runs ORDER BY id DESC LIMIT 1');
-    const backups = listBackups().map(({ date, bytes }) => ({ date, bytes }));
-    const applet = existsSync(NOTIFIER_APP);
-    const s = getSettings(db);
-    const lastAi = last ? { ok: !!last.ok, error: last.error, at: last.started_at, purpose: last.purpose } : null;
-    return c.json({
-      app: APP_INFO,
-      schools,
-      jobs,
-      ai: {
-        enabled: s.aiEnabled, model: s.aiModel, running: aiQueue.running, pending: aiQueue.pending().length,
-        today: { calls: today.calls, failed: today.failed ?? 0, inputTokens: today.input ?? 0, outputTokens: today.output ?? 0 }, last: lastAi,
-      },
-      backups,
-      notifier: { applet, unread: unreadNotices(db) },
-      issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi }),
-    });
+/** Everything the status page (and `coursehub status` / `doctor`) shows. */
+export function buildStatus(db: DB, now: Date = new Date()) {
+  const schools = listSchools(db).map((s) => {
+    const run = recentSyncRuns(db, 1, s.id)[0];
+    return {
+      id: s.id, name: s.name, color: s.color, status: s.status, statusDetail: s.status_detail, authMode: s.auth_mode,
+      loginAt: s.login_at, aliveAt: s.alive_at, renewals: s.renewals, lastSyncAt: s.last_sync_at, lastOkAt: s.last_ok_at,
+      icsFallback: !!s.ics_url, lastRun: run ? { status: run.status, error: run.error, finishedAt: run.finished_at } : null,
+    };
   });
+  const jobs = Object.entries(JOB_LABELS).map(([name, label]) => {
+    const j = getJob(db, name);
+    return { name, label, lastRunAt: j?.last_run_at ?? null, lastStatus: j?.last_status ?? null, lastError: j?.last_error ?? null };
+  });
+  const since = atLocal(localDateStr(now), 0, 0).toISOString();
+  const today = one<{ calls: number; failed: number | null; input: number | null; output: number | null }>(db,
+    'SELECT count(*) AS calls, sum(ok = 0) AS failed, sum(input_tokens) AS input, sum(output_tokens) AS output FROM ai_runs WHERE started_at >= $since', { since })!;
+  const last = one<AiRunRow>(db, 'SELECT * FROM ai_runs ORDER BY id DESC LIMIT 1');
+  const backups = listBackups().map(({ date, bytes }) => ({ date, bytes }));
+  const applet = existsSync(NOTIFIER_APP);
+  const s = getSettings(db);
+  const lastAi = last ? { ok: !!last.ok, error: last.error, at: last.started_at, purpose: last.purpose } : null;
+  return {
+    app: APP_INFO,
+    schools,
+    jobs,
+    ai: {
+      enabled: s.aiEnabled, model: s.aiModel, running: aiQueue.running, pending: aiQueue.pending().length,
+      today: { calls: today.calls, failed: today.failed ?? 0, inputTokens: today.input ?? 0, outputTokens: today.output ?? 0 }, last: lastAi,
+    },
+    backups,
+    notifier: { applet, unread: unreadNotices(db) },
+    issues: statusIssues({ now, schools, jobs, latestBackup: backups[0]?.date ?? null, applet, lastAi }),
+  };
+}
 
+export function registerStatus(app: Hono, db: DB): void {
+  app.get('/api/status', (c) => c.json(buildStatus(db)));
   app.post('/api/backup', (c) => c.json({ created: !!backupDb(db, new Date()) }));
 }

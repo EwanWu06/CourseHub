@@ -38,3 +38,6 @@ export function chromeBin(): string {
 export function claudeBin(): string {
   return process.env.COURSEHUB_CLAUDE_BIN ?? path.join(os.homedir(), '.local/bin/claude');
 }
+
+/** launchd label of the LaunchAgent that keeps Course Hub running (install.sh writes it). */
+export const LAUNCH_LABEL = 'local.coursehub.server';
