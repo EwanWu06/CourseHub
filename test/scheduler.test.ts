@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tmpDataDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
-import { getJob } from '../src/db/runs.ts';
+import { getJob, setJob } from '../src/db/runs.ts';
 import { DEFAULT_SETTINGS } from '../src/db/settings.ts';
-import { parseHHMM, lastSlotAtOrBefore, isSlotDue, isIntervalDue, createScheduler } from '../src/scheduler.ts';
+import { saveReport } from '../src/db/reports.ts';
+import { parseHHMM, lastSlotAtOrBefore, isSlotDue, isIntervalDue, createScheduler, defaultJobs } from '../src/scheduler.ts';
 import type { Job } from '../src/scheduler.ts';
 
 const at = (iso: string) => new Date(iso);
@@ -75,4 +76,74 @@ test('a tick never overlaps a still-running tick', async () => {
   assert.equal(runs, 1);
   release();
   await first;
+});
+
+test('default jobs: after a night asleep the daily report syncs first and runs once, the weekly catches up, reminders keep going', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const calls: string[] = [];
+  const jobs = defaultJobs(db, {
+    runSync: async () => { calls.push('sync'); },
+    onLoginNeeded: () => {},
+    generateDaily: async () => { calls.push('daily'); },
+    generateWeekly: async () => { calls.push('weekly'); },
+    runReminders: async () => { calls.push('reminders'); },
+    flushChanges: async () => { calls.push('changes'); },
+  }).filter((j) => ['daily', 'weekly', 'sync', 'reminders'].includes(j.name));
+  // last runs before the Mac went to sleep on Sunday Oct 11 at 18:00 PDT
+  setJob(db, 'daily', { last_run_at: '2026-10-11T14:00:00.000Z', last_status: 'ok' }); // Sun 07:00
+  setJob(db, 'weekly', { last_run_at: '2026-10-05T03:00:00.000Z', last_status: 'ok' }); // Sun Oct 4, 20:00
+  setJob(db, 'sync', { last_run_at: '2026-10-12T00:00:00.000Z', last_status: 'ok' }); // Sun 17:00
+  setJob(db, 'reminders', { last_run_at: '2026-10-12T00:55:00.000Z', last_status: 'ok' }); // Sun 17:55
+  let now = at('2026-10-12T16:30:00Z'); // wakes Mon 09:30
+  const s = createScheduler(db, jobs, { clock: () => now, settings: () => DEFAULT_SETTINGS });
+  await s.tick();
+  assert.deepEqual(calls, ['sync', 'changes', 'daily', 'weekly', 'reminders', 'changes']);
+  now = at('2026-10-12T16:31:00Z');
+  await s.tick();
+  assert.equal(calls.length, 6, 'nothing again at 09:31 — the daily sync counts as the scheduled one');
+  now = at('2026-10-12T16:46:00Z');
+  await s.tick();
+  assert.deepEqual(calls.slice(6), ['reminders', 'changes']);
+  calls.length = 0;
+  now = at('2026-10-13T08:00:00Z'); // Tue 01:00: reminders yes, sync no
+  await s.tick();
+  assert.deepEqual(calls, ['reminders', 'changes']);
+  now = at('2026-10-13T14:00:00Z'); // Tue 07:00
+  await s.tick();
+  assert.deepEqual(calls.slice(2), ['sync', 'changes', 'daily', 'reminders', 'changes']);
+});
+
+test('the scheduled sync alerts on changes and keeps guides queued', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const calls: string[] = [];
+  const sync = defaultJobs(db, {
+    runSync: async () => { calls.push('sync'); },
+    onLoginNeeded: () => {},
+    flushChanges: async () => { calls.push('changes'); },
+  }).find((j) => j.name === 'sync')!;
+  await sync.run(at('2026-10-12T17:00:00Z'));
+  assert.deepEqual(calls, ['sync', 'changes']);
+});
+
+test('the schedule does not remake a report that already exists for its day or week', async () => {
+  tmpDataDir();
+  const db = openDb();
+  saveReport(db, { type: 'daily', period: '2026-10-12', content: '{}' });
+  saveReport(db, { type: 'weekly', period: '2026-10-12', content: '{}' });
+  const calls: string[] = [];
+  const jobs = defaultJobs(db, {
+    runSync: async () => { calls.push('sync'); },
+    onLoginNeeded: () => {},
+    generateDaily: async () => { calls.push('daily'); },
+    generateWeekly: async () => { calls.push('weekly'); },
+    flushChanges: async () => {},
+  }).filter((j) => j.name === 'daily' || j.name === 'weekly');
+  const s = createScheduler(db, jobs, { clock: () => at('2026-10-13T03:30:00Z'), settings: () => DEFAULT_SETTINGS }); // Mon 20:30, never ran
+  await s.tick();
+  assert.deepEqual(calls, []);
+  const sunday = createScheduler(db, jobs, { clock: () => at('2026-10-19T03:30:00Z'), settings: () => DEFAULT_SETTINGS }); // Sun Oct 18, 20:30
+  await sunday.tick();
+  assert.deepEqual(calls, ['sync', 'daily', 'weekly'], 'Sunday evening makes next week\'s report');
 });

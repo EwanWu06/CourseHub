@@ -15,7 +15,14 @@ import { autoEnqueueGuides } from './ai/guide.ts';
 import { listCourses } from './db/courses.ts';
 import { getSettings as readSettings } from './db/settings.ts';
 import type { SyncOptions } from './sync/index.ts';
+import { flushChangeNotices } from './notify/changes.ts';
+import { runReminders } from './notify/reminders.ts';
+import { getReport } from './db/reports.ts';
+import { weeklyPeriod } from './reports/data.ts';
+import { generateDaily } from './reports/daily.ts';
+import { generateWeekly } from './reports/weekly.ts';
 import { log } from './util/log.ts';
+import { localDateStr } from './util/time.ts';
 
 export interface Slot { hour: number; minute: number; weekday?: number /* 0 = Sunday */ }
 
@@ -99,7 +106,28 @@ export function createScheduler(db: DB, jobs: Job[], opts: { tickMs?: number; cl
 
 const DAY = 86_400_000;
 
-export function defaultJobs(db: DB, deps: { runSync: (opts: SyncOptions) => Promise<unknown>; onLoginNeeded: (s: SchoolRow) => void }): Job[] {
+export interface JobDeps {
+  runSync: (opts: SyncOptions) => Promise<unknown>;
+  onLoginNeeded: (s: SchoolRow) => void;
+  // the rest default to the real thing; tests swap them out
+  generateDaily?: (now: Date) => Promise<unknown>;
+  generateWeekly?: (now: Date) => Promise<unknown>;
+  runReminders?: (now: Date) => Promise<unknown>;
+  flushChanges?: (now: Date) => Promise<unknown>;
+}
+
+export function defaultJobs(db: DB, deps: JobDeps): Job[] {
+  const daily = deps.generateDaily ?? ((now: Date) => generateDaily(db, { now, notify: true }));
+  const weekly = deps.generateWeekly ?? ((now: Date) => generateWeekly(db, { now, notify: true }));
+  const reminders = deps.runReminders ?? ((now: Date) => runReminders(db, now));
+  const changes = deps.flushChanges ?? ((now: Date) => flushChangeNotices(db, now));
+  const syncNow = async (now: Date) => {
+    await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
+    await changes(now);
+    // Re-read syllabi whose sources changed (the analysis itself skips unchanged input), keep guides queued.
+    if (readSettings(db).aiEnabled) for (const c of listCourses(db)) enqueueSyllabus(db, c.id);
+    autoEnqueueGuides(db, now);
+  };
   return [
     {
       name: 'keepalive', // every 30 minutes, day and night, while the Mac is awake
@@ -109,12 +137,32 @@ export function defaultJobs(db: DB, deps: { runSync: (opts: SyncOptions) => Prom
       },
     },
     {
+      name: 'daily', // settings.dailyTime (07:00); after sleep it runs once on wake. Always syncs first.
+      isDue: (now, last, s) => isSlotDue(now, last, parseHHMM(s.dailyTime)) && !getReport(db, `daily:${localDateStr(now)}`),
+      run: async (now) => {
+        await syncNow(now);
+        setJob(db, 'sync', { last_run_at: now.toISOString(), last_status: 'ok', last_error: null }); // counts as the scheduled sync
+        await daily(now);
+      },
+    },
+    {
+      name: 'weekly', // settings.weeklyDay + weeklyTime (Sunday 20:00), caught up once after sleep
+      isDue: (now, last, s) => isSlotDue(now, last, { ...parseHHMM(s.weeklyTime), weekday: s.weeklyDay }) && !getReport(db, `weekly:${weeklyPeriod(now)}`),
+      run: async (now) => {
+        await weekly(now);
+      },
+    },
+    {
       name: 'sync',
       isDue: (now, last, s) => isIntervalDue(now, last, s.syncIntervalHours, { start: s.syncWindowStart, end: s.syncWindowEnd }),
-      run: async () => {
-        await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
-        // Re-read syllabi whose sources changed (the analysis itself skips unchanged input).
-        if (readSettings(db).aiEnabled) for (const c of listCourses(db)) enqueueSyllabus(db, c.id);
+      run: syncNow,
+    },
+    {
+      name: 'reminders', // every 15 minutes: deadline/exam reminders, and alerts for changes found by manual syncs
+      isDue: (now, last) => isIntervalDue(now, last, 0.25, { start: 0, end: 24 }),
+      run: async (now) => {
+        await reminders(now);
+        await changes(now);
       },
     },
     {

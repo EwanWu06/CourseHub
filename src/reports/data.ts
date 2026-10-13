@@ -220,12 +220,16 @@ export function computeDaily(db: DB, now: Date): DailyData {
   };
 }
 
-/** On Sunday the weekly report looks at the coming week; any other day, at the current one. */
-export function computeWeekly(db: DB, now: Date): WeeklyData {
-  const view = makeTaskViewer(db, now);
+/** The Monday a weekly report made now is about: on Sunday the coming week, any other day the current one. */
+export function weeklyPeriod(now: Date): string {
   const today = localDateStr(now);
   const monday = mondayOf(today);
-  const weekStart = today === addDays(monday, 6) ? addDays(monday, 7) : monday;
+  return today === addDays(monday, 6) ? addDays(monday, 7) : monday;
+}
+
+export function computeWeekly(db: DB, now: Date): WeeklyData {
+  const view = makeTaskViewer(db, now);
+  const weekStart = weeklyPeriod(now);
   const weekEnd = addDays(weekStart, 6);
   const lastStart = addDays(weekStart, -7);
 

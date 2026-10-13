@@ -1,5 +1,6 @@
 // Course Hub server entry point (run by the LaunchAgent): local web UI + API on 127.0.0.1, plus the scheduler
-// (keep logins alive, sync, daily SSO refresh, cleanup).
+// (keep logins alive, sync + change alerts, 7:00 daily / Sunday 20:00 weekly reports, deadline reminders,
+// study guides, daily SSO refresh, cleanup).
 import { serve } from '@hono/node-server';
 import { PORT, ensureDataDirs } from './config.ts';
 import { cleanTmp } from './content/download.ts';
