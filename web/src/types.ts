@@ -9,7 +9,17 @@ export interface TaskView {
   category: string | null; categorySource: string | null; syllabusNote: string | null;
   dueFromSyllabus: boolean; dueDateOnly: boolean; dueIsClose?: boolean;
   note: string | null;
+  /** what full credit takes (posts, replies, peer reviews) and rules worth knowing */
+  requirements?: { parts: ReqPart[]; notes: ReqNote[] } | null;
+  /** "还差 1 条回复" */
+  remaining?: string | null;
+  /** why the deadline is this one */
+  dueNote?: string | null;
 }
+
+/** A countable step; done null = can't be counted. source text = from the teacher's instructions (quote). */
+export interface ReqPart { kind: 'post' | 'replies' | 'reviews' | 'score'; need: number; done: number | null; source: 'canvas' | 'text'; quote?: string; detail?: string }
+export interface ReqNote { kind: string; text: string; quote?: string }
 
 export interface LoginState { status: 'idle' | 'waiting' | 'success' | 'failed'; message: string; startedAt: string | null }
 
@@ -75,6 +85,10 @@ export interface PlatformView {
 export interface CourseDetailT {
   course: Course; school: SchoolBrief | null; currentWeek: number | null;
   counts: { assignments: number; modules: number; pages: number; files: number; announcements: number; discussions: number };
+  /** how the final grade is made up (Canvas assignment groups) */
+  grading?: { weighted: boolean; groups: { name: string; weight: number | null; dropLowest: number; dropHighest: number; count: number }[] };
+  /** module requirements not met yet (view a page, reach a minimum score…) */
+  unlock?: { module: string; title: string; type: string; minScore: number | null; htmlUrl: string | null }[];
 }
 
 export interface ModuleT { id: string; name: string; position: number; unlock_at: string | null; week_start: number | null; week_end: number | null; week_source: string | null }

@@ -4,6 +4,9 @@ import type { DB } from '../db/index.ts';
 import { changesSince } from '../db/changes.ts';
 import { listCourses } from '../db/courses.ts';
 import { getItem, listItems, listUndated } from '../db/items.ts';
+import { allItemLogic } from '../db/logic.ts';
+import { remainingText, unmetParts } from '../logic/types.ts';
+import type { ItemLogic, LogicNote, LogicPart } from '../logic/types.ts';
 import { listSchools } from '../db/schools.ts';
 import { all, one } from '../db/sql.ts';
 import { getGuide, listWeeks } from '../db/study.ts';
@@ -23,6 +26,12 @@ export interface TaskView {
   dueFromSyllabus: boolean; dueDateOnly: boolean; note: string | null;
   /** no due date in Canvas: dueAt is when the work closes ("available until") */
   dueIsClose: boolean;
+  /** what full credit takes (posts, replies, peer reviews) and rules worth knowing; null = nothing beyond handing it in */
+  requirements: { parts: LogicPart[]; notes: LogicNote[] } | null;
+  /** "还差 1 条回复": the counted steps still missing */
+  remaining: string | null;
+  /** why the deadline is this one (a peer review following the teacher's review column, a first-post date from the instructions) */
+  dueNote: string | null;
 }
 
 const DONE_STATES = new Set(['submitted', 'graded', 'pending_review']);
@@ -55,14 +64,26 @@ export function isGradeColumn(row: Pick<ItemRow, 'submission_types' | 'due_at' |
   return t.length > 0 && t.every((x) => x === 'none');
 }
 
-export function taskStatus(row: ItemRow, now: Date): TaskStatus {
+/**
+ * Done means everything the task asks for: Canvas says "submitted" after a discussion's first post, but while
+ * counted steps (replies, peer reviews) are missing it stays open. Graded, excused or ticked off by the student
+ * (here or in Canvas's planner) is done regardless.
+ */
+export function taskStatus(row: ItemRow, now: Date, logic?: ItemLogic | null): TaskStatus {
   if (row.kind === 'event') return 'event';
-  if (row.local_done || row.canvas_done || row.excused || (row.sub_state && DONE_STATES.has(row.sub_state))) return 'done';
+  const unmet = unmetParts(logic);
+  if (row.local_done || row.canvas_done || row.excused) return 'done';
+  // graded is done — unless Canvas's own module requirement (a minimum score) still isn't met
+  if (row.sub_state === 'graded' && !unmet.some((p) => p.kind === 'score')) return 'done';
+  const short = unmet.length > 0;
+  const counted = (logic?.parts ?? []).some((p) => p.done !== null);
+  if (!short && ((row.sub_state && DONE_STATES.has(row.sub_state)) || counted)) return 'done';
   if (row.missing) return 'missing';
-  const due = effectiveDue(row);
+  const due = logic?.due?.at ?? effectiveDue(row);
   if (!due || Date.parse(due) > now.getTime()) return 'todo';
   if (closesOnly(row)) return 'past'; // it closed: nothing can be handed in any more
   if (row.category === 'exam') return 'past'; // exams are sat, not submitted
+  if (short) return 'overdue'; // replies / peer reviews still owed: Canvas usually still takes them
   // Past due and not done. Only call it overdue when Canvas would actually expect an online submission.
   const t = types(row);
   if (t.length > 0 && t.every((x) => NOT_SUBMITTABLE.has(x))) return 'past';
@@ -103,17 +124,21 @@ export function undatedTasks(db: DB, now: Date, courseId?: string): TaskView[] {
 export function makeTaskViewer(db: DB, now: Date): (row: ItemRow) => TaskView {
   const courses = new Map(listCourses(db, { includeHidden: true, activeOnly: false }).map((c) => [c.id, c]));
   const schools = new Map(listSchools(db).map((s) => [s.id, s]));
+  const logic = allItemLogic(db);
   return (row) => {
     const course = row.course_id ? courses.get(row.course_id) : undefined;
     const school = row.school_id ? schools.get(row.school_id) : undefined;
+    const l = logic.get(row.id) ?? null;
     return {
       id: row.id, title: row.title, kind: row.kind, provider: row.provider, courseId: course?.id ?? null,
       courseName: course ? courseDisplayName(course) : null, schoolId: school?.id ?? null,
-      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: effectiveDue(row), htmlUrl: row.html_url,
-      points: row.points, status: taskStatus(row, now), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
+      schoolName: school?.name ?? null, color: course?.color ?? school?.color ?? '#64748b', dueAt: l?.due?.at ?? effectiveDue(row), htmlUrl: row.html_url,
+      points: row.points, status: taskStatus(row, now, l), estMinutes: estimateMinutes(row), source: row.source, localDone: !!row.local_done,
       category: row.category ?? null, categorySource: row.category_source ?? null, syllabusNote: row.syllabus_note ?? null,
       dueFromSyllabus: !row.due_at && !!row.syllabus_date, dueDateOnly: !row.due_at && !!row.syllabus_date && !row.syllabus_time_known,
-      note: row.user_note ?? null, dueIsClose: closesOnly(row),
+      note: row.user_note ?? null, dueIsClose: !l?.due?.at && closesOnly(row),
+      requirements: l && (l.parts.length || l.notes.length) ? { parts: l.parts, notes: l.notes } : null,
+      remaining: remainingText(l), dueNote: l?.due?.note ?? null,
     };
   };
 }

@@ -12,6 +12,10 @@ export interface CourseRow {
   color: string | null; hidden: number; term_name: string | null; start_at: string | null; end_at: string | null;
   html_url: string; syllabus_html: string | null; tabs: string | null; current_score: number | null;
   current_grade: string | null; week1: string | null; active: number; updated_at: string;
+  /** JSON array of the teachers' Canvas user ids */
+  teacher_ids: string | null;
+  /** 1 = the final grade weights the assignment groups (else it is points) */
+  apply_weights: number | null;
 }
 
 export type ItemKind = 'assignment' | 'quiz' | 'discussion' | 'review' | 'page' | 'note' | 'event' | 'manual';
@@ -29,17 +33,27 @@ export interface ItemRow {
   user_note: string | null;
 }
 
-export interface AssignmentGroupRow { id: string; course_id: string; name: string; weight: number | null; position: number }
+export interface AssignmentGroupRow {
+  id: string; course_id: string; name: string; weight: number | null; position: number;
+  /** JSON {drop_lowest, drop_highest, never_drop} as Canvas gives it */
+  rules: string | null;
+}
 
 export interface ModuleRow {
   id: string; course_id: string; canvas_id: string; name: string; position: number; unlock_at: string | null;
   week_start: number | null; week_end: number | null; week_source: string | null;
+  /** Canvas's module state for this student: locked / unlocked / started / completed */
+  state: string | null;
+  /** JSON array of the Canvas ids of modules that must be completed first */
+  prereq_ids: string | null;
 }
 
 export interface ModuleItemRow {
   id: string; module_id: string; course_id: string; title: string; type: string; content_id: string | null;
   page_url: string | null; html_url: string | null; external_url: string | null; position: number; indent: number;
   ref_id: string | null;
+  /** the module's completion requirement for this item (must_view, must_submit, min_score…) and whether it is met */
+  req_type: string | null; req_min_score: number | null; req_done: number | null;
 }
 
 export interface PageRow {

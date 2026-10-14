@@ -24,6 +24,9 @@ export function compactTask(t: TaskView, now: Date): Record<string, unknown> {
     due: describeDue(t.dueAt, now, { dateOnly: t.dueDateOnly }), minutes: t.estMinutes,
     ...(t.points !== null ? { points: t.points } : {}), ...(STATUS_ZH[t.status] ? { status: STATUS_ZH[t.status] } : {}),
     ...(t.note ? { note: t.note } : {}),
+    // "已交" in Canvas but the replies / peer reviews are still owed
+    ...(t.remaining && t.status !== 'done' ? { still_needed: t.remaining } : {}),
+    ...(t.requirements?.notes.length ? { rules: t.requirements.notes.map((n) => n.text) } : {}),
   };
 }
 

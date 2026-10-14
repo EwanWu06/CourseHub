@@ -36,6 +36,7 @@ import { all } from '../src/db/sql.ts';
 import { pendingText } from '../src/notify/mac.ts';
 import { runReminders } from '../src/notify/reminders.ts';
 import { flushChangeNotices } from '../src/notify/changes.ts';
+import { replaceCourseLogic } from '../src/db/logic.ts';
 
 function world() {
   tmpDataDir();
@@ -97,6 +98,17 @@ test('an item first seen 2 hours before its deadline gets only the 3-hour remind
   assert.equal(seen.length, 1);
   assert.deepEqual(all<{ threshold: string }>(db, "SELECT threshold FROM reminders_sent WHERE item_id = 'late-add' ORDER BY threshold").map((r) => r.threshold), ['24', '3']);
   assert.equal(await runReminders(db, before(1)), 0);
+  setNotifier(null);
+});
+
+test('a discussion Canvas calls submitted still reminds while replies are missing, and says what is left', async () => {
+  const { db, school, course, add, seen } = world();
+  add('disc', { kind: 'discussion', title: "Discussion: What's Your Topic?", due_at: DUE, sub_state: 'submitted', submission_types: '["discussion_topic"]' });
+  replaceCourseLogic(db, school.id, course, new Map([['disc', {
+    parts: [{ kind: 'post' as const, need: 1, done: 1, source: 'canvas' as const }, { kind: 'replies' as const, need: 2, done: 1, source: 'text' as const }], notes: [],
+  }]]));
+  assert.equal(await runReminders(db, before(23.5)), 1);
+  assert.equal(seen[0].body, "BIO 3 · Discussion: What's Your Topic?（还差 1 条回复）");
   setNotifier(null);
 });
 

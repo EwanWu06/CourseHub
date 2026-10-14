@@ -25,7 +25,7 @@ function when(t: TaskView, now: Date): string {
 function single(d: Due, now: Date): Notice {
   const t = d.task;
   const title = d.exam ? `考试：${when(t, now)}` : d.key !== EVE && Number(d.key) <= 6 ? `${d.key} 小时内截止` : `${when(t, now)} 截止`;
-  return { kind: 'reminder', title, body: `${t.courseName ?? ''} · ${t.title}`, url: t.htmlUrl ?? `http://127.0.0.1:${PORT}/courses/${t.courseId ?? ''}` };
+  return { kind: 'reminder', title, body: `${t.courseName ?? ''} · ${t.title}${t.remaining ? `（${t.remaining}）` : ''}`, url: t.htmlUrl ?? `http://127.0.0.1:${PORT}/courses/${t.courseId ?? ''}` };
 }
 
 function grouped(key: string, ds: Due[], now: Date): Notice {

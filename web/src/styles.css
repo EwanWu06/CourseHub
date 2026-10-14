@@ -339,6 +339,19 @@
   .cat-chip.is-user select { color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 3px; }
   .cat-chip.is-exam select { color: var(--seal); font-weight: 600; background-color: var(--seal-soft); border-radius: 999px; padding: 0 16px 0 8px; background-position: right 8px center, right 4px center; }
   .syllabus-note { font-size: 12px; color: var(--amber); margin-top: 3px; }
+  .task-reqs { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 5px; font-size: 12px; align-items: center; }
+  .req {
+    display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; border: 1px solid var(--rule-strong);
+    color: var(--ink-2); line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; cursor: help;
+  }
+  .req.is-met { color: var(--moss); border-color: color-mix(in oklab, var(--moss) 40%, var(--rule)); background: color-mix(in oklab, var(--moss) 8%, transparent); }
+  .req.is-short { color: var(--seal); border-color: color-mix(in oklab, var(--seal) 45%, var(--rule)); background: var(--seal-soft); font-weight: 600; }
+  .req.is-todo { color: var(--ink-2); }
+  .req.is-unknown { color: var(--muted); border-style: dashed; }
+  .req-note { color: var(--muted); }
+  .req-note + .req-note::before { content: '·'; margin-right: 8px; color: var(--rule-strong); }
+  .req-note[title] { text-decoration: underline dotted var(--rule-strong); text-underline-offset: 3px; cursor: help; }
+  .task.is-done .req.is-met, .task.is-done .req-note { opacity: .75; }
   .from-syllabus { font-family: var(--font-body); font-size: 10.5px; padding: 1px 5px; margin-right: 6px; border-radius: 4px; background: var(--amber-soft); color: var(--amber); vertical-align: 1px; }
   .exam-card { border-color: color-mix(in oklab, var(--seal) 35%, var(--rule)); }
   .exam-card .kicker { color: var(--seal); }
@@ -366,6 +379,10 @@
   .tabs a[aria-current='page'] { color: var(--ink); border-bottom-color: var(--c, var(--ink)); font-weight: 600; }
   .big-week { font-family: var(--font-zh); font-size: 30px; margin: 4px 0; }
   .glance { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 6px; }
+  .grading { padding: 4px 0; }
+  .grading-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--rule); }
+  .grading-row:last-child { border-bottom: 0; }
+  .grading-w { font-size: 14px; color: var(--ink); min-width: 44px; text-align: right; }
   .glance a { text-decoration: none; color: var(--ink-2); }
   .glance b { font-family: var(--font-display); font-size: 20px; color: var(--ink); margin-right: 4px; }
   .canvas-paper { background: #fffdf8; color: #1c1a15; border: 1px solid var(--rule); border-radius: var(--radius); padding: 22px 26px; line-height: 1.7; overflow-x: auto; color-scheme: light; }

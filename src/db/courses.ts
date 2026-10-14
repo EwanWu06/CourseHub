@@ -2,12 +2,14 @@ import type { DB } from './index.ts';
 import type { CourseRow } from './types.ts';
 import { all, one, pick, placeholders, run, updateRow } from './sql.ts';
 
-export type CourseUpsert = Omit<CourseRow, 'nickname' | 'color' | 'hidden' | 'week1'>;
+export type CourseUpsert = Omit<CourseRow, 'nickname' | 'color' | 'hidden' | 'week1' | 'teacher_ids' | 'apply_weights'>
+  & Partial<Pick<CourseRow, 'teacher_ids' | 'apply_weights'>>;
 
 const COLS = ['id', 'school_id', 'canvas_id', 'name', 'code', 'term_name', 'start_at', 'end_at', 'html_url',
-  'syllabus_html', 'tabs', 'current_score', 'current_grade', 'active', 'updated_at'] as const;
-// syllabus_html/tabs are filled by the content sync; a null from the course listing must not wipe them.
-const KEEP_IF_NULL = new Set(['syllabus_html', 'tabs']);
+  'syllabus_html', 'tabs', 'current_score', 'current_grade', 'active', 'updated_at', 'teacher_ids', 'apply_weights'] as const;
+// syllabus_html/tabs are filled by the content sync; a null from the course listing must not wipe them (nor a
+// listing that came without teachers).
+const KEEP_IF_NULL = new Set(['syllabus_html', 'tabs', 'teacher_ids', 'apply_weights']);
 
 export function upsertCourse(db: DB, row: CourseUpsert): void {
   const r = pick(row as unknown as Record<string, unknown>, COLS);

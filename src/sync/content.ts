@@ -56,7 +56,10 @@ export async function syncModules(ctx: SyncContext, course: CourseRow): Promise<
   const keepItems = new Set<string>();
   for (const m of modules) {
     const moduleId = `${s}:m:${m.id}`;
-    upsertModule(ctx.db, { id: moduleId, course_id: course.id, canvas_id: m.id, name: m.name, position: m.position ?? 0, unlock_at: m.unlock_at ?? null });
+    upsertModule(ctx.db, {
+      id: moduleId, course_id: course.id, canvas_id: m.id, name: m.name, position: m.position ?? 0, unlock_at: m.unlock_at ?? null,
+      state: m.state ?? null, prereq_ids: m.prerequisite_module_ids?.length ? JSON.stringify(m.prerequisite_module_ids.map(String)) : null,
+    });
     keepModules.add(moduleId);
     const items: CanvasModuleItem[] = m.items ?? (m.items_count === 0 ? [] : await ctx.client.getAll<CanvasModuleItem>(`/api/v1/courses/${course.canvas_id}/modules/${m.id}/items`, { 'include[]': ['content_details'] }));
     for (const it of items) {
@@ -65,6 +68,8 @@ export async function syncModules(ctx: SyncContext, course: CourseRow): Promise<
         id, module_id: moduleId, course_id: course.id, title: it.title, type: it.type, content_id: it.content_id ? String(it.content_id) : null,
         page_url: it.page_url ?? null, html_url: it.html_url ?? null, external_url: it.external_url ?? null,
         position: it.position ?? 0, indent: it.indent ?? 0, ref_id: null,
+        req_type: it.completion_requirement?.type ?? null, req_min_score: it.completion_requirement?.min_score ?? null,
+        req_done: it.completion_requirement && typeof it.completion_requirement.completed === 'boolean' ? (it.completion_requirement.completed ? 1 : 0) : null,
       });
       keepItems.add(id);
     }

@@ -10,11 +10,11 @@ function upsert(db: DB, table: string, row: Record<string, unknown>, cols: reado
 }
 
 // ---- modules ----
-const MODULE_COLS = ['id', 'course_id', 'canvas_id', 'name', 'position', 'unlock_at'] as const;
+const MODULE_COLS = ['id', 'course_id', 'canvas_id', 'name', 'position', 'unlock_at', 'state', 'prereq_ids'] as const;
 const MODULE_ITEM_COLS = ['id', 'module_id', 'course_id', 'title', 'type', 'content_id', 'page_url', 'html_url',
-  'external_url', 'position', 'indent', 'ref_id'] as const;
+  'external_url', 'position', 'indent', 'ref_id', 'req_type', 'req_min_score', 'req_done'] as const;
 
-export function upsertModule(db: DB, row: Omit<ModuleRow, 'week_start' | 'week_end' | 'week_source'>): void {
+export function upsertModule(db: DB, row: Omit<ModuleRow, 'week_start' | 'week_end' | 'week_source' | 'state' | 'prereq_ids'> & Partial<Pick<ModuleRow, 'state' | 'prereq_ids'>>): void {
   upsert(db, 'modules', row as unknown as Record<string, unknown>, MODULE_COLS);
 }
 
@@ -22,7 +22,7 @@ export function setModuleWeek(db: DB, id: string, w: { week_start: number | null
   updateRow(db, 'modules', w, 'id = $__id', { __id: id });
 }
 
-export function upsertModuleItem(db: DB, row: ModuleItemRow): void {
+export function upsertModuleItem(db: DB, row: Omit<ModuleItemRow, 'req_type' | 'req_min_score' | 'req_done'> & Partial<Pick<ModuleItemRow, 'req_type' | 'req_min_score' | 'req_done'>>): void {
   upsert(db, 'module_items', row as unknown as Record<string, unknown>, MODULE_ITEM_COLS);
 }
 
@@ -133,8 +133,8 @@ export function listConversations(db: DB, schoolId?: string): ConversationRow[] 
 }
 
 // ---- assignment groups ----
-export function upsertAssignmentGroup(db: DB, row: AssignmentGroupRow): void {
-  upsert(db, 'assignment_groups', row as unknown as Record<string, unknown>, ['id', 'course_id', 'name', 'weight', 'position']);
+export function upsertAssignmentGroup(db: DB, row: Omit<AssignmentGroupRow, 'rules'> & { rules?: string | null }): void {
+  upsert(db, 'assignment_groups', { rules: null, ...row } as unknown as Record<string, unknown>, ['id', 'course_id', 'name', 'weight', 'position', 'rules']);
 }
 
 export function listAssignmentGroups(db: DB, courseId: string): (AssignmentGroupRow & { count: number })[] {

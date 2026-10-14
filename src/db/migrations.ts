@@ -305,4 +305,30 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (course_id, platform)
   );
   `,
+  // 10: what each task takes for full credit (posts, replies, peer reviews…) and how far the student is; who wrote the
+  // posts the student replied to (so "two different classmates" can be counted); course grading rules
+  `
+  CREATE TABLE item_logic (
+    item_id TEXT PRIMARY KEY,
+    school_id TEXT NOT NULL,
+    course_id TEXT,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX item_logic_course ON item_logic(course_id);
+  CREATE TABLE entry_authors (
+    school_id TEXT NOT NULL,
+    entry_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    PRIMARY KEY (school_id, entry_id)
+  );
+  ALTER TABLE courses ADD COLUMN teacher_ids TEXT;
+  ALTER TABLE courses ADD COLUMN apply_weights INTEGER;
+  ALTER TABLE assignment_groups ADD COLUMN rules TEXT;
+  ALTER TABLE modules ADD COLUMN state TEXT;
+  ALTER TABLE modules ADD COLUMN prereq_ids TEXT;
+  ALTER TABLE module_items ADD COLUMN req_type TEXT;
+  ALTER TABLE module_items ADD COLUMN req_min_score REAL;
+  ALTER TABLE module_items ADD COLUMN req_done INTEGER;
+  `,
 ];

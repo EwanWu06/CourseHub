@@ -23,6 +23,7 @@ import { syncCourseContent, syncInbox } from './content.ts';
 import { rebuildWeeks } from '../weeks/build.ts';
 import { extractPendingFiles } from '../content/pipeline.ts';
 import { findAchieveLaunch, readAchieveInChrome, syncAchieve } from '../platforms/achieve.ts';
+import { syncCourseLogic } from './logic.ts';
 import type { AchieveReader } from '../platforms/achieve.ts';
 
 export interface SyncOptions {
@@ -87,6 +88,10 @@ async function apiSync(db: DB, school: SchoolRow, client: CanvasClient, now: Dat
   }
   await guarded(ctx, '日历事件', () => syncCalendarEvents(ctx, courses));
   await guarded(ctx, '待办计划', () => syncPlanner(ctx, courses));
+  // what each task takes (replies, peer reviews…) — after the planner, which lists the peer reviews
+  for (const course of courses.filter((c) => ctx.complete.has(c.id))) {
+    await guarded(ctx, `${course.name} 作业要求`, () => syncCourseLogic(ctx, course));
+  }
   await guarded(ctx, '缺交列表', () => syncMissing(ctx));
   await guarded(ctx, '收件箱', () => syncInbox(ctx));
   await guarded(ctx, '提取文字', () => extractPendingFiles(ctx));

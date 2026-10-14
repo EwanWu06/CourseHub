@@ -1,4 +1,5 @@
 import type { CanvasClient } from '../canvas/client.ts';
+import type { CanvasAssignment, CanvasQuiz } from '../canvas/types.ts';
 import type { CrossCheckResult, Evidence } from './crosscheck.ts';
 import type { DB } from '../db/index.ts';
 import type { SchoolRow } from '../db/types.ts';
@@ -20,6 +21,8 @@ export interface SyncContext {
   quizToAssignment: Map<string, string>; // canvas quiz id → canvas assignment id
   topicToAssignment: Map<string, string>; // canvas discussion topic id → canvas assignment id
   evidence?: Evidence; // Canvas's own lists, kept for the after-sync cross-check
+  /** each course's assignment and quiz listings as Canvas sent them, for the requirements pass after the planner */
+  raw?: Map<string, { assignments: CanvasAssignment[]; quizzes: CanvasQuiz[] | null }>;
 }
 
 export function newStats(): SyncStats {

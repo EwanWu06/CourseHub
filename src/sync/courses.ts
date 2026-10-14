@@ -7,7 +7,7 @@ const KEEP_ENDED_FOR_MS = 7 * 86_400_000;
 
 /** Current (non-concluded) courses; everything else for the school is marked inactive. Returns visible+hidden active courses. */
 export async function syncCourses(ctx: SyncContext): Promise<CourseRow[]> {
-  const raw = await ctx.client.getAll<CanvasCourse>('/api/v1/courses', { enrollment_state: 'active', 'include[]': ['term', 'total_scores'] });
+  const raw = await ctx.client.getAll<CanvasCourse>('/api/v1/courses', { enrollment_state: 'active', 'include[]': ['term', 'total_scores', 'teachers'] });
   const cutoff = ctx.now.getTime() - KEEP_ENDED_FOR_MS;
   const keep: string[] = [];
   for (const c of raw) {
@@ -21,6 +21,8 @@ export async function syncCourses(ctx: SyncContext): Promise<CourseRow[]> {
       start_at: c.start_at ?? c.term?.start_at ?? null, end_at: end, html_url: `${ctx.school.base_url}/courses/${c.id}`,
       syllabus_html: null, tabs: null, current_score: enrollment?.computed_current_score ?? null,
       current_grade: enrollment?.computed_current_grade ?? null, active: 1, updated_at: ctx.now.toISOString(),
+      teacher_ids: Array.isArray(c.teachers) ? JSON.stringify(c.teachers.map((t) => String(t.id))) : null,
+      apply_weights: c.apply_assignment_group_weights === undefined ? null : c.apply_assignment_group_weights ? 1 : 0,
     });
     keep.push(id);
   }

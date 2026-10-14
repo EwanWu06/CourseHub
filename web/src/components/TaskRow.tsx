@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, refreshAll } from '../api.ts';
 import { fmtCountdown, fmtDue } from '../format.ts';
-import { CATEGORY_LABEL, KIND_LABEL, STATUS_LABEL, providerNote, sealFor } from '../lib/tasks.ts';
+import { CATEGORY_LABEL, KIND_LABEL, STATUS_LABEL, providerNote, reqChips, sealFor } from '../lib/tasks.ts';
 import { Link } from '../router.tsx';
 import type { TaskView } from '../types.ts';
 import { Icon } from './Icon.tsx';
@@ -11,6 +11,19 @@ function countdownTone(t: TaskView, now: Date): string {
   if (!t.dueAt || t.status !== 'todo') return '';
   const h = (Date.parse(t.dueAt) - now.getTime()) / 3_600_000;
   return h < 24 ? 'hot' : h < 48 ? 'warm' : '';
+}
+
+/** What full credit takes and how far along it is ("首帖 ✓ · 回复 1/2"), plus rules worth knowing (one attempt, PDF only…). */
+function Requirements({ task }: { task: TaskView }) {
+  const chips = reqChips(task);
+  const notes = task.requirements?.notes ?? [];
+  if (!chips.length && !notes.length) return null;
+  return (
+    <div className="task-reqs">
+      {chips.map((c, i) => <span key={i} className={`req is-${c.tone}`} title={c.title}>{c.text}</span>)}
+      {notes.map((n, i) => <span key={`n${i}`} className="req-note" title={n.quote ? `原文：${n.quote}` : undefined}>{n.text}</span>)}
+    </div>
+  );
 }
 
 function CategoryChip({ task }: { task: TaskView }) {
@@ -99,7 +112,9 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
           {task.source === 'ics' ? <span title="登录过期期间来自日历订阅，提交状态未知">日历订阅</span> : null}
           {!userNote && !editing ? <button type="button" className="add-note" onClick={() => { setDraft(''); setEditing(true); }}>＋备注</button> : null}
         </div>
+        <Requirements task={task} />
         {task.syllabusNote ? <div className="syllabus-note">📅 {task.syllabusNote}</div> : null}
+        {task.dueNote ? <div className="syllabus-note">📅 {task.dueNote}</div> : null}
         {editing ? (
           <input className="note-input" autoFocus value={draft} maxLength={300} placeholder="写一句备注，比如：带计算器 / 要打印出来交" aria-label="备注"
             onChange={(e) => setDraft(e.target.value)} onBlur={() => void saveNote()}

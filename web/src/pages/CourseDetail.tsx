@@ -43,6 +43,47 @@ function SyllabusAnalysis({ id, analysis }: { id: string; analysis: SyllabusT['a
   );
 }
 
+/** How the final grade is made up: weighted categories (or plain points) and the scores each drops. */
+function Grading({ grading }: { grading: NonNullable<CourseDetailT['grading']> }) {
+  const groups = grading.groups.filter((g) => (grading.weighted ? (g.weight ?? 0) > 0 : g.count > 0) || g.dropLowest || g.dropHighest);
+  if (!groups.length) return null;
+  return (
+    <Section title="成绩怎么算" note={grading.weighted ? '按类别加权' : '按总分算，各类不加权'}>
+      <div className="card grading">
+        {groups.map((g) => (
+          <div key={g.name} className="grading-row">
+            <span className="grow">{g.name}</span>
+            {g.dropLowest ? <Badge tone="warn">最低 {g.dropLowest} 次不计</Badge> : null}
+            {g.dropHighest ? <Badge>最高 {g.dropHighest} 次不计</Badge> : null}
+            {grading.weighted ? <span className="grading-w mono">{g.weight ?? 0}%</span> : <span className="small muted">{g.count} 项</span>}
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+const UNLOCK_WHAT: Record<string, string> = {
+  must_view: '要打开看过', must_submit: '要提交', must_contribute: '要发帖', must_mark_done: '要点「标记为完成」', min_score: '分数要够', min_percentage: '分数要够',
+};
+
+/** Module requirements this student hasn't met: until they are, later modules can stay locked. */
+function Unlock({ list }: { list: NonNullable<CourseDetailT['unlock']> }) {
+  if (!list.length) return null;
+  return (
+    <Section title="模块要求还没完成" note="没完成的话，后面的模块可能一直锁着">
+      <div className="card grading">
+        {list.map((u, i) => (
+          <div key={i} className="grading-row">
+            <span className="grow">{u.htmlUrl ? <ExtLink href={u.htmlUrl}>{u.title}</ExtLink> : u.title}<span className="small muted"> · {u.module}</span></span>
+            <Badge tone="warn">{UNLOCK_WHAT[u.type] ?? u.type}{u.minScore !== null && (u.type === 'min_score' || u.type === 'min_percentage') ? `（至少 ${u.minScore}${u.type === 'min_percentage' ? '%' : ' 分'}）` : ''}</Badge>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
   const { data } = useApi<SyllabusT>(`/api/courses/${enc(id)}/syllabus`);
   return (
@@ -66,6 +107,8 @@ function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
           </div>
         </div>
       </div>
+      {detail.unlock ? <Unlock list={detail.unlock} /> : null}
+      {detail.grading ? <Grading grading={detail.grading} /> : null}
       <Section title="教学大纲" note={data ? <ExtLink href={data.htmlUrl}>在 Canvas 打开</ExtLink> : null}>
         {!data ? <Spinner /> : (
           <>

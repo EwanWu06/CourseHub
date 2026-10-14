@@ -10,11 +10,16 @@ export interface CanvasEnrollment {
 export interface CanvasCourse {
   id: string; name?: string; course_code?: string; start_at?: string | null; end_at?: string | null; term?: CanvasTerm | null;
   enrollments?: CanvasEnrollment[]; access_restricted_by_date?: boolean; workflow_state?: string; syllabus_body?: string | null;
+  /** include[]=teachers */
+  teachers?: { id: string; display_name?: string }[] | null;
+  apply_assignment_group_weights?: boolean;
 }
 
 export interface CanvasSubmission {
   workflow_state?: string; submitted_at?: string | null; score?: number | null; grade?: string | null; late?: boolean;
-  missing?: boolean; excused?: boolean | null;
+  missing?: boolean; excused?: boolean | null; user_id?: string;
+  /** a discussion's submission lists the student's own entries (top-level posts have no parent) */
+  discussion_entries?: { id: string; parent_id?: string | null; user_id?: string; created_at?: string }[] | null;
   /** discussion checkpoints (include[]=sub_assignment_submissions): one entry per checkpoint */
   sub_assignment_submissions?: (Omit<CanvasSubmission, 'sub_assignment_submissions'> & { sub_assignment_tag: string })[] | null;
 }
@@ -28,16 +33,28 @@ export interface CanvasCheckpoint {
 export interface CanvasAssignment {
   id: string; name: string; description?: string | null; due_at?: string | null; unlock_at?: string | null; lock_at?: string | null;
   points_possible?: number | null; submission_types?: string[]; html_url?: string; quiz_id?: string | null;
-  is_quiz_assignment?: boolean; is_quiz_lti_assignment?: boolean; discussion_topic?: { id: string } | null;
+  is_quiz_assignment?: boolean; is_quiz_lti_assignment?: boolean;
+  discussion_topic?: { id: string; require_initial_post?: boolean | null; reply_to_entry_required_count?: number | null; group_category_id?: string | null } | null;
+  /** peer reviews: once they hand in, each student reviews peer_review_count classmates */
+  peer_reviews?: boolean; peer_review_count?: number | null; automatic_peer_reviews?: boolean;
+  /** -1 = unlimited */
+  allowed_attempts?: number | null; allowed_extensions?: string[] | null;
   external_tool_tag_attributes?: { url?: string | null } | null; submission?: CanvasSubmission | null; published?: boolean;
   assignment_group_id?: string | null; has_sub_assignments?: boolean; checkpoints?: CanvasCheckpoint[] | null;
 }
 
-export interface CanvasAssignmentGroup { id: string; name: string; group_weight?: number | null; position?: number }
+export interface CanvasAssignmentGroup {
+  id: string; name: string; group_weight?: number | null; position?: number;
+  rules?: { drop_lowest?: number; drop_highest?: number; never_drop?: string[] } | null;
+}
 
 export interface CanvasQuiz {
   id: string; title: string; due_at?: string | null; unlock_at?: string | null; lock_at?: string | null; html_url?: string;
   assignment_id?: string | null; quiz_type?: string; points_possible?: number | null; published?: boolean;
+  /** minutes; null = untimed */
+  time_limit?: number | null;
+  /** -1 = unlimited */
+  allowed_attempts?: number | null;
 }
 
 export interface CanvasPlannerSubmissions {
@@ -63,10 +80,13 @@ export interface CanvasModuleItem {
   id: string; title: string; type: string; content_id?: string | null; html_url?: string | null; url?: string | null;
   page_url?: string | null; external_url?: string | null; position?: number; indent?: number;
   content_details?: { due_at?: string | null; points_possible?: number | null; locked_for_user?: boolean };
+  /** what the module needs done with this item, and whether this student has (students get `completed`) */
+  completion_requirement?: { type: string; min_score?: number | null; completed?: boolean } | null;
 }
 
 export interface CanvasModule {
   id: string; name: string; position?: number; unlock_at?: string | null; state?: string; items_count?: number; items?: CanvasModuleItem[];
+  prerequisite_module_ids?: string[] | null; require_sequential_progress?: boolean;
 }
 
 export interface CanvasPage {

@@ -22,19 +22,32 @@ export interface MockAssignment {
   }[];
   /** the student is in a section/ad-hoc override: the ICS feed lists it as event-assignment-override-<id> "(N students)" */
   override?: { id: string; label: string };
+  /** the student's own posts in this discussion (Canvas puts them in the submission as discussion_entries) */
+  entries?: { id: string; parent_id: string | null }[];
+  /** peer reviews: each student reviews this many classmates once they hand in */
+  peer_review_count?: number;
+  require_initial_post?: boolean;
+  allowed_extensions?: string[];
+  allowed_attempts?: number;
 }
 export interface MockModuleItem {
   id: string; title: string; type: 'File' | 'Page' | 'Assignment' | 'Quiz' | 'Discussion' | 'ExternalUrl' | 'ExternalTool' | 'SubHeader';
   content_id?: string; page_url?: string; external_url?: string; position: number; indent?: number;
+  /** a module completion requirement and whether this student has met it */
+  requirement?: { type: 'must_submit' | 'must_view' | 'must_contribute' | 'must_mark_done' | 'min_score'; min_score?: number; completed: boolean };
 }
-export interface MockModule { id: string; name: string; position: number; unlock_at: string | null; items: MockModuleItem[]; omitItems?: boolean }
+export interface MockModule {
+  id: string; name: string; position: number; unlock_at: string | null; items: MockModuleItem[]; omitItems?: boolean;
+  /** locked until the prerequisite modules are complete */
+  state?: 'locked' | 'unlocked' | 'started' | 'completed'; prereqs?: string[];
+}
 export interface MockPage { page_id: string; url: string; title: string; body: string; updated_at: string; front_page: boolean }
 export interface MockFile { id: string; display_name: string; content_type: string; size: number; updated_at: string; bytes: Buffer | null; locked?: boolean }
 export interface MockTopic {
   id: string; title: string; message: string; posted_at: string | null; author: string; is_announcement: boolean;
   assignment_id?: string; unread_count: number; discussion_subentry_count: number; created_at?: string;
 }
-export interface MockQuiz { id: string; title: string; due_at: string | null; quiz_type: string; assignment_id: string | null; points_possible: number | null }
+export interface MockQuiz { id: string; title: string; due_at: string | null; quiz_type: string; assignment_id: string | null; points_possible: number | null; time_limit?: number | null; allowed_attempts?: number }
 export interface MockEvent { id: string; title: string; start_at: string; end_at: string; all_day: boolean; description: string }
 export interface MockCourse {
   id: string; name: string; course_code: string; start_at: string | null; end_at: string | null;
@@ -43,7 +56,12 @@ export interface MockCourse {
   filesListForbidden?: boolean; assignments: MockAssignment[]; quizzes: MockQuiz[]; modules: MockModule[];
   /** list endpoints a student gets 404/403 for when the teacher hid the tab (seen at SMC, UCLA Ext, LACCD) */
   apiHidden?: ('pages' | 'quizzes' | 'files')[];
-  groups?: { id: string; name: string; weight: number }[];
+  groups?: { id: string; name: string; weight: number; rules?: Record<string, number> }[];
+  applyWeights?: boolean;
+  /** user ids of the course's teachers (include[]=teachers) */
+  teachers?: string[];
+  /** who wrote each classmate's post the student replied to (discussion entry_list) */
+  entryAuthors?: Record<string, string>;
   pages: MockPage[]; files: MockFile[]; topics: MockTopic[]; events: MockEvent[];
 }
 export interface MockPlannerExtra {
@@ -343,23 +361,64 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
     const ann = (id: string, title: string, posted_at: string | null, extra: Partial<MockTopic> = {}): MockTopic => ({
       id, title, message: `<p>${title}</p>`, posted_at, author: 'Instructor', is_announcement: true, unread_count: 0, discussion_subentry_count: 0, ...extra,
     });
-    // like SMC ENGL C1000: peer reviews, a survey that only has an "available until", presenters on an override, hidden tabs
+    // the next Sunday after today, 11:59 PM: a week's discussion deadline
+    const sunday = (() => {
+      const d = new Date(Date.parse(at(0, 12, 0)));
+      return at((7 - d.getDay()) % 7 || 7);
+    })();
+    // like SMC ENGL C1000: peer reviews, a survey that only has an "available until", presenters on an override, hidden tabs,
+    // discussions whose instructions ask for replies, and a peer-review grade column
     const engl: MockCourse = {
       id: '301', name: '2026 Fall - ENGL C1000 (2074) - Academic Reading and Writing (O)', course_code: 'ENGL C1000',
       start_at: weekStart(6), end_at: weeksAfter(6, 12), term, score: 91, grade: 'A-', syllabus_body: '<p>Essays, presentations and peer reviews.</p>',
       tabs: ['home', 'modules', 'announcements', 'assignments', 'discussions', 'grades', 'syllabus'], apiHidden: ['pages', 'quizzes', 'files'],
       assignments: [
-        asg('7101', 'Essay #2: Rough Draft', at(-3), { submission: sub('submitted', { submitted_at: at(-4, 20, 0) }) }),
+        asg('7101', 'Essay #2: Rough Draft', at(-3), { submission: sub('submitted', { submitted_at: at(-4, 20, 0) }), peer_review_count: 3 }),
         asg('7102', 'Course Survey', null, { lock_at: at(9), submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '7801', points_possible: 0 }),
         asg('7103', 'Presentations: The First Half', at(5), { override: { id: '225628', label: '11 students' } }),
         asg('7104', 'Extra Credit: Media Critique', null, { lock_at: at(-8), submission: sub('graded', { score: 5, grade: '5' }) }),
+        // the main post is in, one of the two replies is missing: Canvas already says "submitted"
+        asg('7105', "Discussion: What's Your Topic?", at(1), {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7355', points_possible: 20,
+          description: '<p>Here we\'re going to throw around some ideas. So for this assignment, you need to:</p><ul><li>Write at least 100 words explaining your comparison. Tell us what it is, and why you think it will be a good comparison.</li><li>Reply at least two times to other students with questions, critiques, or suggestions.</li></ul>',
+          submission: sub('submitted', { submitted_at: at(-6, 19, 52) }), entries: [{ id: '9100', parent_id: null }, { id: '9101', parent_id: '9201' }],
+        }),
+        asg('7106', 'Discussion: Source Analysis', at(6), {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7356', points_possible: 20, entries: [],
+          description: '<p>Write a review of the website of one of the following information sources.</p><p>Explain why you think these are good or bad academic research sources, about 200-300 words total.</p><p>IMPORTANT CAVEAT: NO DOUBLES. READ THE THREAD BEFORE POSTING.</p>',
+        }),
+        asg('7107', 'Peer Reviews for Bradbury Draft', at(4), {
+          submission_types: ['none'], points_possible: 30,
+          description: '<p>You will be assigned three of your colleagues\' rough drafts to review.</p><p>Note: you won\'t be assigned any peer reviews until you submit your own rough draft. Three thoughtful peer reviews = 30 points.</p>',
+        }),
+        // an earlier deadline only the title gives
+        asg('7109', 'Syllabus Quiz!', at(-20), {
+          submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '7811', points_possible: 15, submission: sub('graded', { score: 10, grade: '10' }),
+        }),
+        asg('7108', 'Week 8 Discussion (Initial Post Due Thursday)', sunday, {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7357', points_possible: 25, entries: [],
+          description: '<p>Share one example, then respond to at least two classmates.</p>',
+        }),
       ],
+      teachers: ['9050'],
+      entryAuthors: { '9201': 'u-sean', '9202': 'u-carol', '9203': '9050' },
       quizzes: [],
-      modules: [{ id: '7150', name: 'Week 7, Module 7', position: 1, unlock_at: null, items: [
-        { id: '7151', title: 'Essay #2: Rough Draft', type: 'Assignment', content_id: '7101', position: 1 },
-        { id: '7152', title: 'Presentations: The First Half', type: 'Assignment', content_id: '7103', position: 2 },
-      ] }],
-      pages: [], files: [], events: [],
+      modules: [
+        // a minimum score unlocks the course (like SMC's syllabus quiz / UCLA's policy training): 10 of 15 isn't enough
+        { id: '7160', name: 'Start Here', position: 0, unlock_at: null, state: 'started', items: [
+          { id: '7161', title: 'Read: Course Policies', type: 'Page', page_url: 'course-policies', position: 1, requirement: { type: 'must_view', completed: false } },
+          { id: '7162', title: 'Syllabus Quiz!', type: 'Assignment', content_id: '7109', position: 2, requirement: { type: 'min_score', min_score: 12, completed: false } },
+        ] },
+        { id: '7150', name: 'Week 7, Module 7', position: 1, unlock_at: null, items: [
+          { id: '7151', title: 'Essay #2: Rough Draft', type: 'Assignment', content_id: '7101', position: 1, requirement: { type: 'must_submit', completed: true } },
+          { id: '7152', title: 'Presentations: The First Half', type: 'Assignment', content_id: '7103', position: 2 },
+        ] },
+        { id: '7170', name: 'Week 8, Module 8', position: 2, unlock_at: null, state: 'locked', prereqs: ['7160'], items: [
+          { id: '7171', title: 'Week 8 Discussion (Initial Post Due Thursday)', type: 'Assignment', content_id: '7108', position: 1 },
+        ] },
+      ],
+      pages: [{ page_id: '7190', url: 'course-policies', title: 'Read: Course Policies', body: '<p>Late work loses 10% per day.</p>', updated_at: at(-30, 9, 0), front_page: false }],
+      files: [], events: [],
       topics: [
         ann('7201', 'Welcome to English C1000!', before(weekStart(6), 2)),
         ann('7202', 'New York Times on Freedom Of Speech', null, { created_at: before(weekStart(6), 55) }),
@@ -381,6 +440,17 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
             { tag: 'reply_to_entry', due_at: at(6), points_possible: 10, submitted_at: null, sub_id: '10449537', required: 2 },
           ],
         }),
+        // Canvas marks "Required Replies (2)" submitted at the first reply
+        asg('7305', 'Faster Reaction or More Product? - Initial Response Due Thursday', null, {
+          submission_types: ['discussion_topic'], discussion_topic_id: '7358', require_initial_post: true,
+          description: '<p>A complete grade means that you have:</p><ul><li>Posted an initial response that answers all four questions.</li><li>Replied to at least two different classmates . In each reply, evaluate one specific prediction.</li></ul>',
+          submission: sub('pending_review', { submitted_at: at(-2, 17, 0) }),
+          entries: [{ id: '9300', parent_id: null }, { id: '9301', parent_id: '9401' }],
+          checkpoints: [
+            { tag: 'reply_to_topic', due_at: at(-1), points_possible: 25, submitted_at: at(-2, 17, 0), sub_id: '10392524' },
+            { tag: 'reply_to_entry', due_at: at(2), points_possible: 25, submitted_at: at(-2, 17, 20), sub_id: '10392525', required: 2 },
+          ],
+        }),
         asg('7304', 'Experiment 34: Share and compare results', null, {
           submission_types: ['discussion_topic'], discussion_topic_id: '7352', submission: sub('pending_review', { submitted_at: at(-4, 19, 0) }),
           checkpoints: [
@@ -388,7 +458,18 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
             { tag: 'reply_to_entry', due_at: at(-1), points_possible: 5, submitted_at: null, sub_id: '9911995', required: 1, done_in_planner: true },
           ],
         }),
+        asg('7306', 'Titrations and pH Curves', at(5), {
+          submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '7810', points_possible: 100,
+          description: '<p>Digital Lab Submission Reminders:</p><ul><li>You will have one attempt to complete this assignment.</li><li>Do not push the "submit" button until you have completed the assignment. There is no way to unsubmit assignments.</li><li>You may only complete the assignment if you are physically in the lab.</li></ul>',
+        }),
+        asg('7307', 'Lab report upload', at(4), { allowed_extensions: ['pdf'] }),
+        // a PlayPosit lecture video that still carries a file-type setting: nothing is uploaded
+        asg('7308', '19.6 Gibbs Free Energy', at(5), { submission_types: ['external_tool'], external_url: 'https://www.playposit.com/lti/1.3/launch', allowed_extensions: ['pdf'], points_possible: 2 }),
       ],
+      teachers: ['9051'],
+      entryAuthors: { '9401': 'u-dana' },
+      groups: [{ id: '95', name: 'Lab', weight: 25, rules: { drop_lowest: 2 } }, { id: '96', name: 'Knowledge Checks', weight: 25 }],
+      applyWeights: true,
       quizzes: [], pages: [], files: [], events: [],
       modules: [{ id: '7350', name: 'Chapter 18 | Week 7', position: 1, unlock_at: null, items: [
         { id: '7353', title: 'Chapter 18 Homework', type: 'Assignment', content_id: '7301', position: 1 },

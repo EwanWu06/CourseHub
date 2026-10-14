@@ -8,6 +8,8 @@ import { CHECKPOINT_LABEL, checkpointsOf, getItem, markRemovedExcept, setItemFla
 import { nowIso } from '../db/index.ts';
 import type { ItemUpsert } from '../db/items.ts';
 import type { CourseRow, ItemKind } from '../db/types.ts';
+import { instructionsOf, isCanvasDiscussion, isDiscussionLike } from '../logic/assignment.ts';
+import { milestoneDate } from '../logic/instructions.ts';
 import { noteItemChange } from './changes.ts';
 import type { SyncContext } from './context.ts';
 import { detectProvider } from './providers.ts';
@@ -57,10 +59,40 @@ export function assignmentRow(ctx: SyncContext, course: CourseRow, a: CanvasAssi
   };
 }
 
+const HANDED_IN = new Set(['submitted', 'graded', 'pending_review']);
+
+/**
+ * A discussion whose instructions set an earlier deadline for the first post ("Initial Post Due Thursday") while
+ * Canvas has one date (Sunday): the first post becomes its own task on that day. Its state is the student's own
+ * top-level post where Canvas lists their entries, else the discussion's.
+ */
+function initialPostRow(ctx: SyncContext, course: CourseRow, a: CanvasAssignment, parent: ItemUpsert): ItemUpsert | null {
+  if (a.has_sub_assignments || !a.due_at || !isDiscussionLike(a)) return null;
+  const ref = instructionsOf(a).postDue?.value;
+  const at = ref ? milestoneDate(a.due_at, ref) : null;
+  if (!at) return null;
+  const id = `${parent.id}:initial_post`;
+  const entries = a.submission?.discussion_entries;
+  // the student's own top-level post, when Canvas lists their entries (none listed while Canvas says handed in: unknown)
+  const listed = isCanvasDiscussion(a) && Array.isArray(entries) && (entries.length > 0 || !(parent.sub_state && HANDED_IN.has(parent.sub_state)));
+  const posted = listed ? entries!.some((e) => !e.parent_id) : null;
+  const state = posted === true ? 'submitted' : parent.sub_state === 'graded' ? 'graded'
+    : posted === null && parent.sub_state && HANDED_IN.has(parent.sub_state) ? parent.sub_state : 'unsubmitted';
+  const kept = blankItem(ctx, id, course, parent.kind, parent.title);
+  return {
+    ...parent, id, title: `${a.name} · 首帖`, due_at: at, lock_at: null, points: null, description_html: null,
+    module_id: kept.module_id ?? parent.module_id, canvas_done: getItem(ctx.db, parent.id)?.canvas_done ?? 0, // ticked off as a whole in the planner
+    sub_state: state, submitted_at: null, missing: 0, late: 0, score: null, grade: null,
+  };
+}
+
 /** A discussion with checkpoints has no due date of its own: it becomes one task per checkpoint, each with its own state. */
 export function assignmentRows(ctx: SyncContext, course: CourseRow, a: CanvasAssignment): ItemUpsert[] {
   const parent = assignmentRow(ctx, course, a);
-  if (!a.has_sub_assignments || !a.checkpoints?.length) return [parent];
+  if (!a.has_sub_assignments || !a.checkpoints?.length) {
+    const first = initialPostRow(ctx, course, a, parent);
+    return first ? [parent, first] : [parent];
+  }
   const subs = a.submission?.sub_assignment_submissions ?? [];
   const parentModule = getItem(ctx.db, parent.id)?.module_id ?? null;
   return a.checkpoints.map((cp) => {
@@ -84,7 +116,8 @@ export async function syncAssignmentGroups(ctx: SyncContext, course: CourseRow):
   try {
     const groups = await ctx.client.getAll<CanvasAssignmentGroup>(`/api/v1/courses/${course.canvas_id}/assignment_groups`);
     for (const g of groups) {
-      upsertAssignmentGroup(ctx.db, { id: `${ctx.school.id}:g:${g.id}`, course_id: course.id, name: g.name, weight: g.group_weight ?? null, position: g.position ?? 0 });
+      const rules = g.rules && (g.rules.drop_lowest || g.rules.drop_highest || g.rules.never_drop?.length) ? JSON.stringify(g.rules) : null;
+      upsertAssignmentGroup(ctx.db, { id: `${ctx.school.id}:g:${g.id}`, course_id: course.id, name: g.name, weight: g.group_weight ?? null, position: g.position ?? 0, rules });
     }
   } catch (err) {
     if (!(err instanceof CanvasForbiddenError || err instanceof CanvasNotFoundError)) throw err;
@@ -96,6 +129,7 @@ export async function syncAssignments(ctx: SyncContext, course: CourseRow): Prom
   const list = await ctx.client.getAll<CanvasAssignment>(`/api/v1/courses/${course.canvas_id}/assignments`, {
     'include[]': ['submission', 'checkpoints', 'sub_assignment_submissions'], order_by: 'due_at',
   });
+  (ctx.raw ??= new Map()).set(course.id, { assignments: list, quizzes: null });
   const seen = new Set<string>();
   for (const a of list) {
     if (a.published === false) continue;
@@ -116,6 +150,8 @@ export async function syncQuizzes(ctx: SyncContext, course: CourseRow): Promise<
     if (err instanceof CanvasForbiddenError || err instanceof CanvasNotFoundError) return null;
     throw err;
   }
+  const raw = ctx.raw?.get(course.id);
+  if (raw) raw.quizzes = list;
   const seen = new Set<string>();
   for (const q of list) {
     if (q.assignment_id || q.published === false) continue;

@@ -1,6 +1,6 @@
 // Pure helpers for task lists and the calendar (kept DOM-free so Node tests can import them).
 import { fmtDate } from '../format.ts';
-import type { ItemKind, TaskStatus, TaskView } from '../types.ts';
+import type { ItemKind, ReqPart, TaskStatus, TaskView } from '../types.ts';
 
 export const KIND_LABEL: Record<ItemKind, string> = {
   assignment: '作业', quiz: '测验', discussion: '讨论', review: '互评', page: '阅读', note: '备忘', event: '日程', manual: '手动',
@@ -71,4 +71,32 @@ export function monthGrid(year: number, month: number): { date: string; inMonth:
     cells.push({ date: dateKey(d), inMonth: d.getMonth() === month, day: d.getDate() });
   }
   return cells;
+}
+
+const PART_LABEL: Record<ReqPart['kind'], string> = { post: '首帖', replies: '回复', reviews: '互评', score: '分数' };
+const PART_NEED: Record<ReqPart['kind'], (n: number) => string> = {
+  post: (n) => `主帖 ${n} 篇`, replies: (n) => `回复 ${n} 位同学`, reviews: (n) => `互评 ${n} 份`, score: (n) => `至少 ${n} 分`,
+};
+
+export interface ReqChip { text: string; tone: 'met' | 'short' | 'todo' | 'unknown'; title: string }
+
+/**
+ * "首帖 ✓" / "回复 1/2" / "互评 3 份": what full credit takes and how far along it is, with the teacher's words on hover.
+ * Red (short) is for half-done steps — "submitted" in Canvas but not finished — and for anything late; a step not
+ * started on work that isn't due yet is a plain to-do.
+ */
+export function reqChips(t: Pick<TaskView, 'requirements'> & Partial<Pick<TaskView, 'status'>>): ReqChip[] {
+  const late = t.status === 'overdue' || t.status === 'missing';
+  return (t.requirements?.parts ?? []).map((p) => {
+    const label = p.kind === 'post' && p.need > 1 ? '主帖' : PART_LABEL[p.kind];
+    const title = [
+      `要求：${PART_NEED[p.kind](p.need)}${p.source === 'canvas' ? '（Canvas 设置）' : ''}`,
+      p.done === null ? '这一项 Course Hub 数不到，请以 Canvas 为准' : `现在：${p.done}`,
+      p.detail ?? '',
+      p.quote ? `原文：${p.quote}` : '',
+    ].filter(Boolean).join('\n');
+    if (p.done === null) return { text: p.kind === 'reviews' ? `${label} ${p.need} 份` : p.kind === 'score' ? `至少 ${p.need} 分` : `${label} ×${p.need}`, tone: 'unknown', title };
+    if (p.done >= p.need) return { text: p.need === 1 || p.kind === 'score' ? `${label} ✓` : `${label} ${p.need}/${p.need}`, tone: 'met', title };
+    return { text: `${label} ${p.done}/${p.need}`, tone: p.done > 0 || late ? 'short' : 'todo', title };
+  });
 }

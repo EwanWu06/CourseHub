@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import type { DB } from '../../db/index.ts';
 import { getCourse, listCourses, updateCourseUser } from '../../db/courses.ts';
-import { getFile, getPage, getTopic, listConversations, listFiles, listModuleItems, listModules, listPages, listTopics } from '../../db/content.ts';
+import { getFile, getPage, getTopic, listAssignmentGroups, listConversations, listFiles, listModuleItems, listModules, listPages, listTopics } from '../../db/content.ts';
 import { getItem, listItems, listUndated } from '../../db/items.ts';
 import { getSchool, listSchools } from '../../db/schools.ts';
 import { all, one } from '../../db/sql.ts';
@@ -28,6 +28,28 @@ function requireCourse(db: DB, id: string): CourseRow {
 function schoolBrief(db: DB, id: string) {
   const s = getSchool(db, id);
   return s ? { id: s.id, name: s.name, color: s.color, baseUrl: s.base_url } : null;
+}
+
+/** How the final grade is made up: weighted groups (or plain points) and the scores each group drops. */
+function grading(db: DB, course: CourseRow) {
+  const groups = listAssignmentGroups(db, course.id).map((g) => {
+    let rules: { drop_lowest?: number; drop_highest?: number } = {};
+    try {
+      rules = g.rules ? JSON.parse(g.rules) as typeof rules : {};
+    } catch {
+      rules = {};
+    }
+    return { name: g.name, weight: g.weight, dropLowest: rules.drop_lowest ?? 0, dropHighest: rules.drop_highest ?? 0, count: g.count };
+  });
+  return { weighted: course.apply_weights === 1, groups };
+}
+
+/** Module requirements this student hasn't met yet (view a page, reach a minimum score…), in module order. */
+function unlockList(db: DB, course: CourseRow) {
+  const modules = new Map(listModules(db, course.id).map((m) => [m.id, m]));
+  return listModuleItems(db, course.id).filter((i) => i.req_type && i.req_done === 0).map((i) => ({
+    module: modules.get(i.module_id)?.name.trim() ?? '', title: i.title, type: i.req_type!, minScore: i.req_min_score, htmlUrl: i.html_url,
+  }));
 }
 
 function courseItems(db: DB, courseId: string): ItemRow[] {
@@ -62,6 +84,8 @@ export function registerCourses(app: Hono, db: DB): void {
       course: publicCourse(course),
       school: schoolBrief(db, course.school_id),
       currentWeek: currentWeek(db, course.id, new Date()),
+      grading: grading(db, course),
+      unlock: unlockList(db, course),
       counts: {
         assignments: count("SELECT COUNT(*) AS n FROM items WHERE course_id = $id AND removed = 0 AND kind IN ('assignment','quiz','discussion','manual')"),
         modules: count('SELECT COUNT(*) AS n FROM modules WHERE course_id = $id'),

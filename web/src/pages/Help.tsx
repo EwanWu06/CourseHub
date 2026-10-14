@@ -44,6 +44,10 @@ export function Help() {
           <Term k={<span className="badge">开放到</span>}>Canvas 上没写截止日期，只写了「开放到」：过了这个时间就交不了，所以按它算截止。</Term>
           <Term k={<span className="badge">同伴互评</span>}>Canvas 分给你的同伴互评（peer review），评完 Canvas 会自动算完成。</Term>
           <Term k={<span className="badge">日程</span>}>Canvas 日历里的活动，不用交东西。</Term>
+          <Term k={<><span className="req is-met">首帖 ✓</span> <span className="req is-short">回复 1/2</span></>}>拿满分要做的几步，和你做到哪了。讨论帖在 Canvas 里发了第一帖就算「已交」，但老师要求的回复没回够，这里就还算没完成、照样提醒。回复按不同的同学算（同一个人只算一次，回复老师不算）。鼠标停在上面能看到作业说明里的原句。</Term>
+          <Term k={<span className="req is-short">互评 0/3</span>}>老师单独设了互评成绩栏时，数你评完了几份；分给你的互评按那一栏的截止时间算。</Term>
+          <Term k={<span className="req is-short">分数 10/12</span>}>模块要求的最低分：分数不够，Canvas 不算你完成这个模块，后面的模块可能打不开，所以就算已出分也还算没完成。</Term>
+          <Term k={<span className="req-note">只有一次机会 · 只能在实验室完成</span>}>作业说明或 Canvas 设置里的规矩（只能交一次、限时、只收 PDF、字数要求等），带下划线的停上去能看原文。</Term>
         </div>
       </section>
 
@@ -82,6 +86,7 @@ export function Help() {
           <Q q="电脑关机或睡眠了怎么办？">醒来后错过的同步、日报、提醒都会补上一次。Course Hub 开机自动启动，出错会自动重启。</Q>
           <Q q="数据存在哪？会丢吗？">都在这台 Mac 的 ~/CourseHub/data 里，只有本机能打开。数据库每天自动备份（保留 14 天），坏了会自动恢复。课程文件不保存，都是链接到 Canvas。</Q>
           <Q q="哪里能看出系统有没有问题？">左下角「<Link to="/status">系统状态</Link>」，有问题会亮红点，并且告诉你点哪里修。</Q>
+          <Q q="「已完成」是怎么判断的？">不是只看 Canvas 的「已交」：老师在作业说明里写的要求（比如一篇主帖加两条回复、互评三份）和 Canvas 自己的设置（讨论的回复次数、模块要求的最低分）都要满足才算完成；作业说明里写了更早的首帖截止（比如「Initial Post Due Thursday」），会单独列成一项、单独提醒。出了分、被老师免掉、或者你自己打了勾，也算完成。</Q>
           <Q q="怎么知道没有漏掉东西？">每次同步完，Course Hub 都会拿 Canvas 自己的四份清单（待办、日历订阅、To Do、缺交列表）逐条核对一遍：Canvas 列出来、这里却没有或时间对不上的，都会写在「<Link to="/status">系统状态</Link>」里，连续两次都不一致就亮红点。Achieve 读不到时，「今天」页会直接提示你去 Achieve 看。</Q>
           <Q q="页面出错或者转圈不动怎么办？">某一页出错只影响那一页，点「再试一次」或「回到今天」就行；后台连不上（比如刚更新完在重启）时顶部会提示，连上后自动刷新。后台程序卡住超过 2 分钟会自动重启，记录在通知里。</Q>
         </div>

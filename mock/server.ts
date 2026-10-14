@@ -139,6 +139,8 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       id: c.id, name: c.name, course_code: c.course_code, start_at: c.start_at, end_at: c.end_at, workflow_state: 'available',
       ...(include.includes('term') ? { term: c.term } : {}),
       ...(include.includes('syllabus_body') ? { syllabus_body: c.syllabus_body } : {}),
+      ...(include.includes('teachers') ? { teachers: (c.teachers ?? []).map((id) => ({ id, display_name: 'Instructor' })) } : {}),
+      apply_assignment_group_weights: !!c.applyWeights,
       enrollments: [{
         type: 'student', enrollment_state: 'active',
         ...(include.includes('total_scores') ? { computed_current_score: c.score, computed_current_grade: c.grade } : {}),
@@ -146,7 +148,13 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     };
   };
 
-  const submissionJson = (a: MockAssignment) => ({ ...a.submission, assignment_id: a.id });
+  const submissionJson = (a: MockAssignment) => ({
+    ...a.submission, assignment_id: a.id, user_id: data.user.id,
+    // like Canvas: a discussion's submission carries the student's own entries
+    ...(a.submission_types.includes('discussion_topic')
+      ? { discussion_entries: (a.entries ?? []).map((e) => ({ id: e.id, parent_id: e.parent_id, user_id: data.user.id, user_name: data.user.name, message: '<p>…</p>' })) }
+      : {}),
+  });
 
   const assignmentJson = (c: MockCourse, a: MockAssignment, include: string[]) => ({
     id: a.id, name: a.name, description: a.description, due_at: a.due_at, unlock_at: a.unlock_at ?? null, lock_at: a.lock_at ?? null,
@@ -154,7 +162,16 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     assignment_group_id: a.group ?? null,
     html_url: `${baseUrl}/courses/${c.id}/assignments/${a.id}`,
     is_quiz_assignment: !!a.is_quiz_assignment, quiz_id: a.quiz_id,
-    ...(a.discussion_topic_id ? { discussion_topic: { id: a.discussion_topic_id } } : {}),
+    ...(a.discussion_topic_id ? {
+      discussion_topic: {
+        id: a.discussion_topic_id, require_initial_post: a.require_initial_post ?? null,
+        ...(a.checkpoints?.length ? { reply_to_entry_required_count: a.checkpoints.find((cp) => cp.tag === 'reply_to_entry')?.required ?? 1 } : {}),
+      },
+    } : {}),
+    peer_reviews: !!a.peer_review_count,
+    ...(a.peer_review_count ? { peer_review_count: a.peer_review_count, automatic_peer_reviews: true } : {}),
+    allowed_attempts: a.allowed_attempts ?? -1,
+    ...(a.allowed_extensions ? { allowed_extensions: a.allowed_extensions } : {}),
     ...(a.external_url ? { external_tool_tag_attributes: { url: a.external_url } } : {}),
     // like Canvas: checkpoint details only when asked for
     has_sub_assignments: !!a.checkpoints?.length,
@@ -181,6 +198,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       url: i.type === 'File' ? `${baseUrl}/api/v1/courses/${c.id}/files/${i.content_id}` : undefined,
       page_url: i.page_url ?? null, external_url: i.external_url ?? null,
       ...(a ? { content_details: { due_at: a.due_at, points_possible: a.points_possible, locked_for_user: false } } : {}),
+      ...(i.requirement ? { completion_requirement: { type: i.requirement.type, ...(i.requirement.min_score !== undefined ? { min_score: i.requirement.min_score } : {}), completed: i.requirement.completed } } : {}),
     };
   };
 
@@ -310,7 +328,12 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       if (rest === '') return { one: courseJson(c, q) };
       if (rest === '/tabs') return { list: c.tabs.map((id) => ({ id, label: id, html_url: `/courses/${c.id}/${id}`, type: 'internal' })) };
       if (rest === '/assignments') return { list: c.assignments.map((a) => assignmentJson(c, a, q.getAll('include[]'))) };
-      if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1 })) };
+      if (rest === '/assignment_groups') return { list: (c.groups ?? []).map((g, i) => ({ id: g.id, name: g.name, group_weight: g.weight, position: i + 1, rules: g.rules ?? {} })) };
+      if ((r = rest.match(/^\/discussion_topics\/(\d+)\/entry_list$/))) {
+        // who wrote the posts asked for (students may look up entries in a topic they can see)
+        const ids = q.getAll('ids[]');
+        return { one: ids.filter((id) => c.entryAuthors?.[id]).map((id) => ({ id, user_id: c.entryAuthors![id], parent_id: null, message: '<p>…</p>' })) };
+      }
       const hidden = (what: 'pages' | 'quizzes' | 'files') => c.apiHidden?.includes(what);
       if (rest === '/external_tools/sessionless_launch') {
         // a one-time launch URL for an LTI tool, as Canvas gives students (and its mobile apps) for module items
@@ -325,7 +348,8 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
       if (rest === '/modules') {
         const withItems = q.getAll('include[]').includes('items');
         return { list: c.modules.map((mod) => ({
-          id: mod.id, name: mod.name, position: mod.position, unlock_at: mod.unlock_at, state: 'unlocked', items_count: mod.items.length,
+          id: mod.id, name: mod.name, position: mod.position, unlock_at: mod.unlock_at, state: mod.state ?? 'unlocked', items_count: mod.items.length,
+          prerequisite_module_ids: mod.prereqs ?? [], require_sequential_progress: false,
           ...(withItems && !mod.omitItems ? { items: mod.items.map((i) => moduleItemJson(c, mod, i)) } : {}),
         })) };
       }
