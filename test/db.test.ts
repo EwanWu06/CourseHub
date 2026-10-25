@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { tmpDataDir } from './helpers.ts';
 import { openDb, tx } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
-import { createSchool, listSchools, getSchool, updateSchool, deleteSchool, normalizeBaseUrl } from '../src/db/schools.ts';
+import { createSchool, listSchools, getSchool, updateSchool, deleteSchool, normalizeBaseUrl, SCHOOL_PALETTE } from '../src/db/schools.ts';
 import { upsertCourse, getCourse, listCourses, updateCourseUser, markInactive } from '../src/db/courses.ts';
 import { upsertItem, getItem, listItems, listUndated, setLocalDone, createManual, deleteManual, markRemovedExcept, setItemNote } from '../src/db/items.ts';
 import type { ItemUpsert } from '../src/db/items.ts';
@@ -61,6 +61,22 @@ test('migration 11 queues files whose text failed once for another try', () => {
   assert.equal(getFile(db2, 'alpha:f:1')!.text_status, 'pending');
   assert.equal(getFile(db2, 'alpha:f:1')!.text_error, null);
   assert.deepEqual(filesNeedingText(db2, 10).map((f) => f.id), ['alpha:f:1']);
+});
+
+test('migration 12 moves default colours to the pigment in the same place and keeps picked ones', () => {
+  tmpDataDir();
+  const db1 = openDb();
+  const { courseId } = seedCourse(db1);
+  db1.prepare("UPDATE schools SET color = '#DC2626'").run();
+  db1.prepare('UPDATE courses SET color = ? WHERE id = ?').run('#2563eb', courseId);
+  db1.prepare("INSERT INTO schools (id, name, base_url, color, created_at) VALUES ('beta', 'Beta', 'https://beta.example', '#123456', '2026-10-01T00:00:00Z')").run();
+  db1.prepare("UPDATE meta SET value = '11' WHERE key = 'schema_version'").run(); // as the database was before
+  db1.close();
+  const db2 = openDb();
+  const colors = Object.fromEntries((db2.prepare('SELECT id, color FROM schools').all() as { id: string; color: string }[]).map((r) => [r.id, r.color]));
+  assert.equal(colors.beta, '#123456');
+  assert.equal(Object.entries(colors).find(([id]) => id !== 'beta')![1], SCHOOL_PALETTE[2]);
+  assert.equal((db2.prepare('SELECT color FROM courses WHERE id = ?').get(courseId) as { color: string }).color, SCHOOL_PALETTE[0]);
 });
 
 test('normalizeBaseUrl keeps only the https origin', () => {

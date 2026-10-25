@@ -336,4 +336,10 @@ export const MIGRATIONS: string[] = [
   `
   UPDATE files SET text_status = 'pending', text_error = NULL WHERE text_status = 'failed';
   `,
+  // 12: the default colours become mineral pigments (the old red, orange and yellow read as "overdue" / "due soon" next to
+  // the seal). Only a colour still at an old default changes, to the pigment in the same place; a picked one stays.
+  `
+  UPDATE schools SET color = CASE lower(color) WHEN '#2563eb' THEN '#2c5a9d' WHEN '#16a34a' THEN '#357d44' WHEN '#dc2626' THEN '#b2628c' WHEN '#9333ea' THEN '#b59432' WHEN '#ea580c' THEN '#008e7f' WHEN '#0891b2' THEN '#654991' WHEN '#db2777' THEN '#789543' WHEN '#ca8a04' THEN '#096b97' ELSE color END;
+  UPDATE courses SET color = CASE lower(color) WHEN '#2563eb' THEN '#2c5a9d' WHEN '#16a34a' THEN '#357d44' WHEN '#dc2626' THEN '#b2628c' WHEN '#9333ea' THEN '#b59432' WHEN '#ea580c' THEN '#008e7f' WHEN '#0891b2' THEN '#654991' WHEN '#db2777' THEN '#789543' WHEN '#ca8a04' THEN '#096b97' ELSE color END WHERE color IS NOT NULL;
+  `,
 ];

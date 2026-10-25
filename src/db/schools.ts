@@ -3,7 +3,9 @@ import { nowIso } from './index.ts';
 import type { SchoolRow } from './types.ts';
 import { all, insertRow, one, pick, run, updateRow } from './sql.ts';
 
-export const SCHOOL_PALETTE = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '#0891b2', '#db2777', '#ca8a04'];
+// Mineral pigments, in the order schools get them: 石青 石绿 藕荷 藤黄 竹青 黛 松绿 花青. None is red, orange or amber
+// (those mean "overdue" and "due soon" here); the first four tell apart for every kind of colour vision.
+export const SCHOOL_PALETTE = ['#2c5a9d', '#357d44', '#b2628c', '#b59432', '#008e7f', '#654991', '#789543', '#096b97'];
 
 const EDITABLE = ['name', 'base_url', 'color', 'auth_mode', 'ics_url', 'user_name', 'status', 'status_detail',
   'last_sync_at', 'last_ok_at', 'links', 'login_at', 'alive_at', 'renewals'] as const;
