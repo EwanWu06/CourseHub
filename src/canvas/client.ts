@@ -40,6 +40,13 @@ export class CanvasHttpError extends Error {
   }
 }
 
+/** The connection failed (offline, the Mac asleep, a dropped download) or Canvas's servers did — not the request itself. */
+export function isTransientError(err: unknown): boolean {
+  if (err instanceof CanvasHttpError) return err.status === 0 || err.status === 429 || err.status >= 500;
+  const e = err as { name?: unknown; message?: unknown } | null;
+  return !!e && (e.name === 'TimeoutError' || e.name === 'AbortError' || /^(fetch failed|terminated)$/.test(String(e.message)));
+}
+
 export type CanvasAuth = { kind: 'session'; jar: CookieJar; userAgent: string } | { kind: 'token'; token: string };
 
 export interface ClientOptions {
@@ -90,11 +97,18 @@ class Semaphore {
 
 const RETRY_5XX = [500, 2000, 6000]; // network errors and 5xx: ~8.5 s in all, enough for Wi-Fi coming back after sleep
 const MAX_RETRY_AFTER_MS = 30_000;
+const OFFLINE = '网络不通（这次同步里 Canvas 已经连不上了）';
 
 export class CanvasClient {
   readonly baseUrl: string;
   requestCount = 0;
   readonly auth: CanvasAuth;
+  /**
+   * Set once a request to this school's Canvas failed at the network level even after its retries. Every later
+   * request fails at once instead of retrying on its own: with the Mac asleep in a bag, a sync used to spend an hour
+   * and a half failing one request after another.
+   */
+  offline = false;
   private fetchImpl: typeof fetch;
   private sleep: (ms: number) => Promise<void>;
   private maxPages: number;
@@ -145,6 +159,7 @@ export class CanvasClient {
       let current = url;
       let retries = 0;
       for (let hop = 0; hop < 6; hop++) {
+        if (this.offline) throw new CanvasHttpError(0, current, OFFLINE);
         let res: Response;
         try {
           res = await this.send(current);
@@ -154,6 +169,8 @@ export class CanvasClient {
             hop--;
             continue;
           }
+          // a file host elsewhere (S3) being unreachable says nothing about Canvas itself
+          if (new URL(current).origin === new URL(this.baseUrl).origin) this.offline = true;
           throw new CanvasHttpError(0, current, `网络错误: ${(err as Error).message}`);
         }
         this.requestCount++;
@@ -215,6 +232,7 @@ export class CanvasClient {
       let rateRetries = 0;
       let serverRetries = 0;
       for (;;) {
+        if (this.offline) throw new CanvasHttpError(0, url, OFFLINE);
         if (this.slowDown) {
           this.slowDown = false;
           await this.sleep(1000);
@@ -227,6 +245,7 @@ export class CanvasClient {
             await this.sleep(RETRY_5XX[serverRetries++]);
             continue;
           }
+          this.offline = true;
           throw new CanvasHttpError(0, url, `网络错误: ${(err as Error).message}`);
         }
         this.requestCount++;

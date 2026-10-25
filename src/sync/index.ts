@@ -1,6 +1,6 @@
 // Orchestrates one school's sync: API first (session or token), ICS fallback when the login lapsed.
 import { SessionExpiredError } from '../canvas/client.ts';
-import type { CanvasClient } from '../canvas/client.ts';
+import type { CanvasClient, ClientOptions } from '../canvas/client.ts';
 import { fetchIcs } from '../canvas/ics.ts';
 import type { CanvasProfile } from '../canvas/types.ts';
 import type { DB } from '../db/index.ts';
@@ -34,6 +34,8 @@ export interface SyncOptions {
   onLoginNeeded?: (school: SchoolRow) => void;
   /** reads a course's Achieve work (default: headless Chrome); null skips publisher platforms */
   readAchieve?: AchieveReader | null;
+  /** Canvas client settings (tests: no waits between retries) */
+  client?: Partial<ClientOptions>;
 }
 
 export class SyncBusyError extends Error {
@@ -55,6 +57,7 @@ async function guarded(ctx: SyncContext, label: string, fn: () => Promise<unknow
     return true;
   } catch (err) {
     if (err instanceof SessionExpiredError) throw err;
+    if (ctx.client.offline) throw err; // Canvas can't be reached: every later step would fail the same way
     ctx.stats.errors.push(`${label}: ${errorText(err)}`);
     log('warn', `sync ${ctx.school.id} ${label} failed`, err);
     return false;
@@ -137,7 +140,7 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
   const now = opts.now ?? new Date();
   const stats = newStats();
   const runId = startSyncRun(db, schoolId);
-  let client = makeClient(school);
+  let client = makeClient(school, opts.client);
   try {
     if (!client) {
       await icsOnly(db, school, now, stats);
@@ -151,7 +154,7 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
         const relogin = isToken ? null : opts.relogin === undefined ? (id: string) => silentReloginResult(db, id) : opts.relogin;
         const outcome = relogin ? await relogin(schoolId) : false;
         if (outcome === true) {
-          client = makeClient(getSchool(db, schoolId)!);
+          client = makeClient(getSchool(db, schoolId)!, opts.client);
           if (!client) throw new Error('重新登录后没有保存登录状态');
           await apiSync(db, getSchool(db, schoolId)!, client, now, stats, opts);
         } else if (outcome === 'error') {
@@ -176,9 +179,18 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
     finishSyncRun(db, runId, stats.errors.length ? 'partial' : 'ok', stats);
   } catch (err) {
     stats.errors.push(errorText(err));
-    finishSyncRun(db, runId, 'error', stats, errorText(err));
-    updateSchool(db, schoolId, { status: 'error', status_detail: errorText(err), last_sync_at: now.toISOString() });
-    log('error', `sync ${schoolId} failed`, err);
+    if (client?.offline) {
+      // offline or asleep (the lid closed in class): the school is fine, so it isn't flagged; the scheduler tries again
+      // soon, and the status page counts hours without a good sync if it lasts
+      stats.offline = true;
+      finishSyncRun(db, runId, 'error', stats, `网络不通，没能连上 Canvas：${errorText(err)}`);
+      updateSchool(db, schoolId, { last_sync_at: now.toISOString() });
+      log('warn', `sync ${schoolId}: Canvas not reachable (offline or asleep)`, err);
+    } else {
+      finishSyncRun(db, runId, 'error', stats, errorText(err));
+      updateSchool(db, schoolId, { status: 'error', status_detail: errorText(err), last_sync_at: now.toISOString() });
+      log('error', `sync ${schoolId} failed`, err);
+    }
   } finally {
     running = null;
   }

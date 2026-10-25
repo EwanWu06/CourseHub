@@ -47,6 +47,26 @@ test('waitForNetwork waits until a school host resolves, up to a limit', async (
   assert.equal(await waitForNetwork([], {}), true, 'nothing to wait for');
 });
 
+test('waitForNetwork waits on a DNS lookup that never answers instead of piling more on, and still ends on time', async () => {
+  let started = 0;
+  const hung = () => {
+    started++;
+    return new Promise<never>(() => {});
+  };
+  const t0 = Date.now();
+  assert.equal(await waitForNetwork(['ilearn.laccd.edu'], { lookup: hung, timeoutMs: 60, stepMs: 10 }), false);
+  assert.ok(Date.now() - t0 < 1000, 'the limit holds even though the lookup never returns');
+  assert.equal(started, 1, 'one lookup, waited on');
+});
+
+test('waitForNetwork is satisfied by any school host (one school\'s DNS can be broken)', async () => {
+  const lookup = async (h: string) => {
+    if (h === 'broken.example.edu') throw new Error('getaddrinfo ENOTFOUND');
+    return { address: '1.2.3.4', family: 4 };
+  };
+  assert.equal(await waitForNetwork(['broken.example.edu', 'ilearn.laccd.edu'], { lookup, timeoutMs: 50, stepMs: 5 }), true);
+});
+
 test('probeInstance tells our own server from a stranger and from a free port', async () => {
   const ours = await startHttp((_req, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, app: 'course-hub' })); });
   const other = await startHttp((_req, res) => { res.writeHead(404); res.end('nope'); });

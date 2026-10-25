@@ -120,6 +120,31 @@ test('session expiring mid-sync keeps existing data, flags the school and falls 
   }
 });
 
+test('Canvas becoming unreachable mid-sync stops the sync at once; nothing is removed and the school is not flagged', async () => {
+  // LACCD, Oct 15: the network went away a few requests in and the sync took 88 minutes to fail every remaining step
+  const { db, mock, schoolId } = await setup('alpha');
+  try {
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null, readAchieve: null });
+    const before = count(db, 'SELECT COUNT(*) AS n FROM items WHERE school_id = ? AND removed = 0', schoolId);
+    mock.offlineAfter(6);
+    const sent = mock.requests.length;
+    const stats = await syncSchool(db, schoolId, { reason: 'test', relogin: null, readAchieve: null, client: { sleep: async () => {} } });
+    assert.equal(stats.offline, true);
+    assert.ok(mock.requests.length - sent <= 6, `stopped at the first unreachable request (${mock.requests.length - sent} answered)`);
+    const school = getSchool(db, schoolId)!;
+    assert.equal(school.status, 'ok', 'offline is not a problem with the school');
+    assert.equal(count(db, 'SELECT COUNT(*) AS n FROM items WHERE school_id = ? AND removed = 0', schoolId), before);
+    const run = db.prepare('SELECT status, error FROM sync_runs WHERE school_id = ? ORDER BY id DESC LIMIT 1').get(schoolId) as { status: string; error: string };
+    assert.equal(run.status, 'error');
+    assert.match(run.error, /网络不通/);
+    mock.offlineAfter(null);
+    const again = await syncSchool(db, schoolId, { reason: 'test', relogin: null, readAchieve: null });
+    assert.ok(!again.offline && again.mode === 'api', 'back online: a normal sync');
+  } finally {
+    await done(mock);
+  }
+});
+
 test('one assignment seen by the assignments API, planner and ICS is stored once', async () => {
   const { db, mock, schoolId } = await setup('alpha');
   try {

@@ -29,6 +29,8 @@ export interface MockCanvas {
   close(): Promise<void>;
   expireSessions(): void;
   expireAfter(n: number): void;
+  /** after n more requests the Canvas host drops every connection (Wi-Fi gone, the Mac asleep); null = back online */
+  offlineAfter(n: number | null): void;
   setRemember(enabled: boolean): void;
   sessionCookies(): StoredCookie[];
   sessionCookieHeader(): string;
@@ -81,6 +83,7 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
   const requests: { method: string; path: string }[] = [];
   let rememberEnabled = true;
   let expireCountdown: number | null = null;
+  let offlineCountdown: number | null = null;
 
   const canvas = http.createServer((req, res) => void handleCanvas(req, res).catch((err) => fail(res, err)));
   const blob = http.createServer((req, res) => handleBlob(req, res));
@@ -458,6 +461,10 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
 
   // ---------- canvas host ----------
   async function handleCanvas(req: IncomingMessage, res: ServerResponse) {
+    if (offlineCountdown !== null && offlineCountdown-- <= 0) {
+      req.socket.destroy();
+      return;
+    }
     const url = new URL(req.url!, baseUrl);
     requests.push({ method: req.method!, path: url.pathname + url.search });
     const cookies = parseCookies(req.headers.cookie);
@@ -607,6 +614,9 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
     },
     expireAfter(n: number) {
       expireCountdown = n;
+    },
+    offlineAfter(n: number | null) {
+      offlineCountdown = n;
     },
     setRemember(enabled: boolean) {
       rememberEnabled = enabled;

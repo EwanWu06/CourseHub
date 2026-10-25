@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tmpDataDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
-import { getJob, setJob } from '../src/db/runs.ts';
+import { finishSyncRun, getJob, setJob, startSyncRun } from '../src/db/runs.ts';
+import { createSchool } from '../src/db/schools.ts';
+import { saveAuth } from '../src/auth/store.ts';
+import { newStats } from '../src/sync/context.ts';
+import { startMockCanvas } from '../mock/server.ts';
 import { DEFAULT_SETTINGS } from '../src/db/settings.ts';
 import { saveReport } from '../src/db/reports.ts';
 import { listBackups } from '../src/db/backup.ts';
@@ -182,6 +186,41 @@ test('a report made early by hand does not move the following ones to midnight',
   assert.deepEqual(made.slice(2), ['daily 2026-10-18T14:30:00.000Z', 'weekly 2026-10-19T03:00:00.000Z']);
   await tickAt('2026-10-19T16:00:00Z'); // Mon 09:00: Monday's daily catches up, the weekly isn't remade
   assert.deepEqual(made.slice(4), ['daily 2026-10-19T16:00:00.000Z']);
+});
+
+test('a sync that could not reach Canvas (offline, asleep) is tried again 15 minutes later, not after the usual 2 hours', () => {
+  tmpDataDir();
+  const db = openDb();
+  const school = createSchool(db, { name: 'LACCD', base_url: 'https://ilearn.laccd.edu' });
+  const job = defaultJobs(db, { runSync: async () => {}, onLoginNeeded: () => {}, networkUp: async () => true }).find((j) => j.name === 'sync')!;
+  const last = at('2026-10-20T19:58:00Z'); // Tue 12:58, the Mac asleep in class
+  assert.equal(job.isDue(at('2026-10-20T20:14:00Z'), last, DEFAULT_SETTINGS), false);
+  finishSyncRun(db, startSyncRun(db, school.id), 'error', { ...newStats(), offline: true }, '网络不通');
+  assert.equal(job.isDue(at('2026-10-20T20:05:00Z'), last, DEFAULT_SETTINGS), false, 'not straight away');
+  assert.equal(job.isDue(at('2026-10-20T20:14:00Z'), last, DEFAULT_SETTINGS), true, '16 minutes later');
+  assert.equal(job.isDue(at('2026-10-21T08:30:00Z'), last, DEFAULT_SETTINGS), false, 'still not at night (01:30)');
+  finishSyncRun(db, startSyncRun(db, school.id), 'ok', newStats());
+  assert.equal(job.isDue(at('2026-10-20T20:14:00Z'), last, DEFAULT_SETTINGS), false, 'back to the usual interval once a sync got through');
+});
+
+test('keep-alive skips its round while no school host resolves', async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha' });
+  try {
+    const school = createSchool(db, { name: 'alpha', base_url: mock.baseUrl });
+    saveAuth({ schoolId: school.id, savedAt: new Date().toISOString(), userAgent: 'test-agent', cookies: mock.sessionCookies() });
+    const pings = () => mock.requests.filter((r) => r.path === '/api/v1/users/self').length;
+    let up = false;
+    const job = defaultJobs(db, { runSync: async () => {}, onLoginNeeded: () => {}, networkUp: async () => up }).find((j) => j.name === 'keepalive')!;
+    await job.run(new Date());
+    assert.equal(pings(), 0);
+    up = true;
+    await job.run(new Date());
+    assert.equal(pings(), 1);
+  } finally {
+    await mock.close();
+  }
 });
 
 test('a job that hangs is cut off at its time limit; the rest of the tick and later ticks still run', { timeout: 5000 }, async () => {

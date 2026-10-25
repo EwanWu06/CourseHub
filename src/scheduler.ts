@@ -1,7 +1,7 @@
 // Minute-tick scheduler with catch-up: a job is due when its last run is older than its most recent slot
 // (or interval), so anything missed while the Mac slept runs once after wake.
 import type { DB } from './db/index.ts';
-import { getJob, pruneRuns, setJob } from './db/runs.ts';
+import { getJob, pruneRuns, recentSyncRuns, setJob } from './db/runs.ts';
 import { getSettings } from './db/settings.ts';
 import type { Settings } from './db/settings.ts';
 import { listSchools } from './db/schools.ts';
@@ -15,6 +15,7 @@ import { autoEnqueueGuides } from './ai/guide.ts';
 import { listCourses } from './db/courses.ts';
 import { getSettings as readSettings } from './db/settings.ts';
 import type { SyncOptions } from './sync/index.ts';
+import type { SyncStats } from './sync/context.ts';
 import { flushChangeNotices } from './notify/changes.ts';
 import { runReminders } from './notify/reminders.ts';
 import { backupDb } from './db/backup.ts';
@@ -138,7 +139,12 @@ export interface JobDeps {
   runReminders?: (now: Date) => Promise<unknown>;
   flushChanges?: (now: Date) => Promise<unknown>;
   fillMissingAi?: (now: Date) => Promise<unknown>;
+  /** waits (up to 90 s) for a school's host to resolve; false = the network is still down */
+  networkUp?: () => Promise<boolean>;
 }
+
+/** After a sync that couldn't reach Canvas (offline, the Mac asleep) the next try comes this soon, not hours later. */
+const OFFLINE_RETRY_HOURS = 0.25;
 
 export function defaultJobs(db: DB, deps: JobDeps): Job[] {
   const daily = deps.generateDaily ?? ((now: Date) => generateDaily(db, { now, notify: true }));
@@ -146,18 +152,25 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
   const reminders = deps.runReminders ?? ((now: Date) => runReminders(db, now));
   const changes = deps.flushChanges ?? ((now: Date) => flushChangeNotices(db, now));
   const fillAi = deps.fillMissingAi ?? ((now: Date) => fillMissingAi(db, now));
-  const networkReady = async () => {
-    const hosts = listSchools(db).flatMap((s) => {
-      try {
-        return [new URL(s.base_url).hostname];
-      } catch {
-        return [];
-      }
-    });
-    if (!(await waitForNetwork(hosts))) log('warn', 'network still unreachable after waiting; trying anyway');
-  };
+  const networkUp = deps.networkUp ?? (() => waitForNetwork(listSchools(db).flatMap((s) => {
+    try {
+      return [new URL(s.base_url).hostname];
+    } catch {
+      return [];
+    }
+  })));
+  // the latest sync of some school stopped because Canvas couldn't be reached
+  const lastSyncOffline = () => listSchools(db).some((s) => {
+    const run = recentSyncRuns(db, 1, s.id)[0];
+    try {
+      return !!run?.stats && (JSON.parse(run.stats) as SyncStats).offline === true;
+    } catch {
+      return false;
+    }
+  });
   const syncNow = async (now: Date) => {
-    await networkReady();
+    // still tried: the run is recorded as offline, which brings the next try forward
+    if (!(await networkUp())) log('warn', 'network still unreachable after waiting; trying anyway');
     await deps.runSync({ reason: 'scheduled', onLoginNeeded: deps.onLoginNeeded });
     await changes(now);
     // Re-read syllabi whose sources changed (the analysis itself skips unchanged input), keep guides queued.
@@ -170,7 +183,11 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
       timeoutMs: 15 * 60_000,
       isDue: (now, last) => isIntervalDue(now, last, 0.5, { start: 0, end: 24 }),
       run: async () => {
-        await networkReady();
+        // no school's host resolves: every request would fail slowly (and a lapsed session can't be renewed either)
+        if (!(await networkUp())) {
+          log('warn', 'network unreachable: keep-alive skipped this round');
+          return;
+        }
         await keepAliveAll(db, { onLoginNeeded: deps.onLoginNeeded });
       },
     },
@@ -205,7 +222,7 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     {
       name: 'sync',
       timeoutMs: 40 * 60_000,
-      isDue: (now, last, s) => isIntervalDue(now, last, s.syncIntervalHours, { start: s.syncWindowStart, end: s.syncWindowEnd }),
+      isDue: (now, last, s) => isIntervalDue(now, last, lastSyncOffline() ? OFFLINE_RETRY_HOURS : s.syncIntervalHours, { start: s.syncWindowStart, end: s.syncWindowEnd }),
       run: syncNow,
     },
     {

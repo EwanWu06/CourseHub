@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { startHttp } from './helpers.ts';
 import { CookieJar } from '../src/canvas/cookies.ts';
 import {
-  CanvasClient, SessionExpiredError, CanvasForbiddenError, CanvasNotFoundError, parseLinkNext, stripWhile1,
+  CanvasClient, SessionExpiredError, CanvasForbiddenError, CanvasHttpError, CanvasNotFoundError, isTransientError, parseLinkNext, stripWhile1,
 } from '../src/canvas/client.ts';
 
 const UA = 'Mozilla/5.0 test';
@@ -220,6 +220,42 @@ test('no more than 3 requests are in flight at once', async () => {
     await Promise.all(Array.from({ length: 10 }, () => c.get('/api/v1/x')));
     assert.equal(max, 3);
   });
+});
+
+test('once Canvas can\'t be reached even after the retries, the client stops trying instead of failing request by request', async () => {
+  // the Mac asleep in class: one sync spent 88 minutes failing every remaining request in turn
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    throw new TypeError('fetch failed');
+  }) as unknown as typeof fetch;
+  const client = new CanvasClient({ baseUrl: 'https://canvas.example.edu', auth: { kind: 'token', token: 't' }, fetchImpl, sleep: noSleep });
+  await assert.rejects(client.get('/api/v1/users/self'), (err) => err instanceof CanvasHttpError && err.status === 0);
+  assert.equal(calls, 4, 'four tries, as before');
+  assert.equal(client.offline, true);
+  await assert.rejects(client.getAll('/api/v1/courses'), /网络不通/);
+  await assert.rejects(client.fetchRaw('https://canvas.example.edu/files/1/download'), /网络不通/);
+  assert.equal(calls, 4, 'nothing else was sent');
+});
+
+test('a file host elsewhere being unreachable does not count as Canvas being offline', async () => {
+  const fetchImpl = (async (url: string | URL) => {
+    if (String(url).startsWith('https://canvas.example.edu')) return new Response(null, { status: 302, headers: { location: 'https://files.example.com/f.pdf' } });
+    throw new TypeError('fetch failed');
+  }) as unknown as typeof fetch;
+  const client = new CanvasClient({ baseUrl: 'https://canvas.example.edu', auth: { kind: 'token', token: 't' }, fetchImpl, sleep: noSleep });
+  await assert.rejects(client.fetchRaw('https://canvas.example.edu/files/1/download'), (err) => err instanceof CanvasHttpError && err.status === 0);
+  assert.equal(client.offline, false);
+});
+
+test('isTransientError tells a connection or server failure from a real answer', () => {
+  assert.ok(isTransientError(new CanvasHttpError(0, 'u', '网络错误: fetch failed')));
+  assert.ok(isTransientError(new CanvasHttpError(503, 'u', 'busy')));
+  assert.ok(isTransientError(new TypeError('terminated')), 'a download cut off halfway');
+  assert.ok(isTransientError(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })));
+  assert.ok(!isTransientError(new CanvasHttpError(200, 'u', 'more than 50 pages')));
+  assert.ok(!isTransientError(new CanvasForbiddenError(403, 'u')));
+  assert.ok(!isTransientError(new Error('Invalid PDF structure')));
 });
 
 test('a listing that is still paging at the page limit is an error, never silently cut short', async () => {

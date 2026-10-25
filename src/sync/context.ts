@@ -8,6 +8,8 @@ export interface SyncStats {
   mode: 'api' | 'ics' | 'skipped'; courses: number; items: number; changes: number; requests: number; errors: string[];
   /** the after-sync comparison with Canvas's own lists (API syncs only) */
   checks?: CrossCheckResult;
+  /** stopped because Canvas couldn't be reached at all (offline, asleep): the scheduler retries soon */
+  offline?: boolean;
 }
 
 export interface SyncContext {
