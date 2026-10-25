@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, refreshAll } from '../api.ts';
 import type { CourseCard } from '../types.ts';
-import { ErrorNote } from './ui.tsx';
+import { ErrorNote, TimeSelect } from './ui.tsx';
 
 /** Dialog for deadlines that live outside Canvas (e.g. Macmillan Achieve work that isn't synced). */
 export function AddTask({ open, onClose, courses }: { open: boolean; onClose: () => void; courses: CourseCard[] }) {
@@ -53,7 +53,7 @@ export function AddTask({ open, onClose, courses }: { open: boolean; onClose: ()
         </label>
         <div className="row">
           <label className="field grow"><span>截止日期</span><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
-          <label className="field"><span>时间</span><input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+          <div className="field"><span>时间</span><TimeSelect value={time} label="时间" onChange={setTime} /></div>
         </div>
         <label className="field"><span>链接（可选）</span><input className="input input-mono" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" /></label>
         <ErrorNote error={error} />

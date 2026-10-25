@@ -17,11 +17,12 @@ export function fileStatus(status: string, error: string | null): { label: strin
 }
 
 const ICONS: Record<string, string> = {
-  File: '📄', Page: '📃', Assignment: '✍️', Quiz: '❓', Discussion: '💬', ExternalUrl: '🔗', ExternalTool: '🧩', SubHeader: '§',
+  File: 'file', Page: 'page', Assignment: 'pencil', Quiz: 'quiz', Discussion: 'chat', ExternalUrl: 'link', ExternalTool: 'plug', SubHeader: 'heading',
 };
 
+/** The line icon (an `<Icon>` name) for a Canvas module item type. */
 export function itemTypeIcon(type: string): string {
-  return ICONS[type] ?? '•';
+  return ICONS[type] ?? 'dot';
 }
 
 const COURSE_TABS = ['overview', 'assignments', 'modules', 'pages', 'files', 'announcements', 'discussions', 'grades'];

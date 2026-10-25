@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api.ts';
 import { fmtBytes, fmtDate, fmtDateTime, fmtDue, fmtRelative } from '../format.ts';
 import { CanvasHtml } from '../components/CanvasHtml.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
-import { Badge, Empty, ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
+import { Badge, Empty, ErrorNote, ExtLink, Section, Loading, useDocumentTitle } from '../components/ui.tsx';
+import { Icon } from '../components/Icon.tsx';
 import { fileStatus, itemTypeIcon, moduleWeekLabel, courseTab } from '../lib/course.ts';
 import { STATUS_LABEL } from '../lib/tasks.ts';
 import { Link } from '../router.tsx';
@@ -32,8 +33,9 @@ function SyllabusAnalysis({ id, analysis }: { id: string; analysis: SyllabusT['a
   const s = analysis?.summary;
   return (
     <div className="callout info" style={{ alignItems: 'center' }}>
+      <Icon name="search" size={16} />
       <span className="grow">
-        🔎 <b>AI 读大纲</b>：
+        <b>AI 读大纲</b>：
         {analysis?.error ? <span style={{ color: 'var(--seal)' }}>上次失败（{analysis.error.slice(0, 60)}）</span>
           : s ? <>找到并核对了 {s.examsApplied} 场考试{s.examsRejected ? `（另有 ${s.examsRejected} 条无法在原文核实，已忽略）` : ''}，修正了 {s.categoriesApplied} 个类别{s.weeksApplied ? `，整理了 ${s.weeksApplied} 周的主题` : ''} · {fmtRelative(analysis!.analyzedAt)}</>
           : '还没有分析（同步后会自动进行）'}
@@ -55,7 +57,7 @@ function Grading({ grading }: { grading: NonNullable<CourseDetailT['grading']> }
             <span className="grow">{g.name}</span>
             {g.dropLowest ? <Badge tone="warn">最低 {g.dropLowest} 次不计</Badge> : null}
             {g.dropHighest ? <Badge>最高 {g.dropHighest} 次不计</Badge> : null}
-            {grading.weighted ? <span className="grading-w mono">{g.weight ?? 0}%</span> : <span className="small muted">{g.count} 项</span>}
+            {grading.weighted ? <span className="grading-w figures">{g.weight ?? 0}%</span> : <span className="small muted">{g.count} 项</span>}
           </div>
         ))}
       </div>
@@ -110,12 +112,12 @@ function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
       {detail.unlock ? <Unlock list={detail.unlock} /> : null}
       {detail.grading ? <Grading grading={detail.grading} /> : null}
       <Section title="教学大纲" note={data ? <ExtLink href={data.htmlUrl}>在 Canvas 打开</ExtLink> : null}>
-        {!data ? <Spinner /> : (
+        {!data ? <Loading /> : (
           <>
             <div style={{ marginBottom: 12 }}><SyllabusAnalysis id={id} analysis={data.analysis} /></div>
             {data.files.length ? (
               <div className="row" style={{ marginBottom: 12 }}>
-                {data.files.map((f) => <ExtLink key={f.id} href={f.html_url} className="btn btn-sm">📄 {f.name}</ExtLink>)}
+                {data.files.map((f) => <ExtLink key={f.id} href={f.html_url} className="btn btn-sm"><Icon name="file" size={14} />{f.name}</ExtLink>)}
               </div>
             ) : null}
             <CanvasHtml html={data.html} empty="这门课没有在 Canvas「Syllabus」页写大纲内容（可能在文件或页面里）。" />
@@ -128,14 +130,14 @@ function Overview({ id, detail }: { id: string; detail: CourseDetailT }) {
 
 function Assignments({ id }: { id: string }) {
   const { data } = useApi<TaskView[]>(`/api/courses/${enc(id)}/assignments`);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   const now = new Date();
   const open = data.filter((t) => t.dueAt && ['todo', 'overdue', 'missing'].includes(t.status)).sort((a, b) => Date.parse(a.dueAt!) - Date.parse(b.dueAt!));
   const undated = data.filter((t) => !t.dueAt && t.status !== 'done');
   const finished = data.filter((t) => t.dueAt && !['todo', 'overdue', 'missing'].includes(t.status)).sort((a, b) => Date.parse(b.dueAt!) - Date.parse(a.dueAt!));
   return (
     <>
-      <Section title="待完成" note={`${open.length} 项`}><TaskList tasks={open} now={now} empty="都完成了 🎉" /></Section>
+      <Section title="待完成" note={`${open.length} 项`}><TaskList tasks={open} now={now} empty="都完成了。" exitOnDone /></Section>
       {undated.length ? <Section title="无截止日期"><TaskList tasks={undated} now={now} /></Section> : null}
       <Section title="已完成 / 已过" note={`${finished.length} 项`}><TaskList tasks={finished} now={now} /></Section>
     </>
@@ -143,18 +145,18 @@ function Assignments({ id }: { id: string }) {
 }
 
 function ModuleItem({ courseId, item }: { courseId: string; item: ModuleItemT }) {
-  if (item.type === 'SubHeader') return <div className="mod-sub" style={{ paddingLeft: 14 + item.indent * 16 }}>{item.title}</div>;
+  if (item.type === 'SubHeader') return <div className="mod-sub" style={{ paddingLeft: 4 + item.indent * 16 }}>{item.title}</div>;
   const ref = item.ref;
   const fs = ref?.kind === 'file' && ref.textStatus ? fileStatus(ref.textStatus, null) : null;
   const inApp = ref?.kind === 'page' ? `/courses/${courseId}/pages/${ref.id}` : null;
   const href = item.type === 'ExternalUrl' ? item.external_url : item.html_url;
   return (
-    <div className="mod-item" style={{ paddingLeft: 14 + item.indent * 16 }}>
-      <span className="mod-icon" aria-hidden="true">{itemTypeIcon(item.type)}</span>
+    <div className="mod-item" style={{ paddingLeft: 4 + item.indent * 16 }}>
+      <span className="mod-icon" aria-hidden="true"><Icon name={itemTypeIcon(item.type)} size={15} /></span>
       <div className="grow">
         {inApp ? <Link to={inApp} className="mod-title">{item.title}</Link> : <ExtLink href={href} className="mod-title">{item.title}</ExtLink>}
         <div className="small muted row" style={{ gap: 10 }}>
-          {ref?.dueAt ? <span className="mono">{fmtDue(ref.dueAt)}</span> : null}
+          {ref?.dueAt ? <span className="figures">{fmtDue(ref.dueAt)}</span> : null}
           {ref?.status && ref.status !== 'todo' ? <span>{STATUS_LABEL[ref.status]}</span> : null}
           {fs ? <Badge tone={fs.tone}>{fs.label}</Badge> : null}
           {inApp && item.html_url ? <ExtLink href={item.html_url}>Canvas</ExtLink> : null}
@@ -164,18 +166,23 @@ function ModuleItem({ courseId, item }: { courseId: string; item: ModuleItemT })
   );
 }
 
-function Modules({ id }: { id: string }) {
+function Modules({ id, currentWeek }: { id: string; currentWeek: number | null }) {
   const { data } = useApi<{ module: ModuleT; items: ModuleItemT[] }[]>(`/api/courses/${enc(id)}/modules`);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   if (data.length === 0) return <Empty glyph="模">这门课没有模块（或者老师隐藏了模块页）。</Empty>;
+  // this week's module opens by itself; with no weeks to go by, the short ones do
+  const isCurrent = (m: ModuleT) => currentWeek !== null && m.week_start !== null && m.week_start <= currentWeek && currentWeek <= (m.week_end ?? m.week_start);
+  const anyCurrent = data.some(({ module }) => isCurrent(module));
   return (
     <div className="stack">
       {data.map(({ module, items }) => {
         const week = moduleWeekLabel(module);
+        const current = isCurrent(module);
         return (
-          <details key={module.id} className="card module" open={items.length <= 12}>
+          <details key={module.id} className={`card module ${current ? 'is-current' : ''}`} open={anyCurrent ? current : items.length <= 12}>
             <summary className="module-head">
               <span className="grow">{module.name}</span>
+              {current ? <span className="seal seal-sm" title="本周">本</span> : null}
               {week ? <span className="badge">{week}</span> : <span className="badge muted">未分周</span>}
               <span className="small muted">{items.filter((i) => i.type !== 'SubHeader').length} 项</span>
             </summary>
@@ -190,7 +197,7 @@ function Modules({ id }: { id: string }) {
 function PageView({ pageId }: { pageId: string }) {
   const { data, error } = useApi<{ page: PageT }>(`/api/pages/${enc(pageId)}`);
   if (error) return <ErrorNote error={error} />;
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   return (
     <article className="stack">
       <div className="row">
@@ -206,13 +213,14 @@ function PageView({ pageId }: { pageId: string }) {
 function Pages({ id, sub }: { id: string; sub?: string }) {
   const { data } = useApi<PageT[]>(sub ? null : `/api/courses/${enc(id)}/pages`);
   if (sub) return (<><Link to={`/courses/${id}/pages`} className="small">← 全部页面</Link><PageView pageId={sub} /></>);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   if (data.length === 0) return <Empty glyph="页">没有页面（或者老师隐藏了页面列表，可以从「模块」进入）。</Empty>;
   return (
     <div className="card list">
       {data.map((p) => (
         <Link key={p.id} to={`/courses/${id}/pages/${p.id}`} className="list-row">
-          <span className="grow">{p.front_page ? '🏠 ' : ''}{p.title}</span>
+          {p.front_page ? <span className="mod-icon" title="课程首页"><Icon name="home" size={15} /></span> : null}
+          <span className="grow">{p.title}</span>
           <span className="small muted">{p.updated_at ? fmtRelative(p.updated_at) : ''}</span>
         </Link>
       ))}
@@ -222,7 +230,7 @@ function Pages({ id, sub }: { id: string; sub?: string }) {
 
 function Files({ id }: { id: string }) {
   const { data } = useApi<FileT[]>(`/api/courses/${enc(id)}/files`);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   if (data.length === 0) return <Empty glyph="档">没有文件。</Empty>;
   return (
     <div className="card table-wrap">
@@ -234,7 +242,7 @@ function Files({ id }: { id: string }) {
             return (
               <tr key={f.id}>
                 <td>{f.name}</td>
-                <td className="mono small nowrap">{fmtBytes(f.size)}</td>
+                <td className="figures small nowrap">{fmtBytes(f.size)}</td>
                 <td className="small muted nowrap">{f.updated_at ? fmtRelative(f.updated_at) : ''}</td>
                 <td><Badge tone={st.tone}>{st.label}{f.text_pages ? ` · ${f.text_pages} 页` : ''}</Badge></td>
                 <td className="nowrap"><ExtLink href={f.html_url}>在 Canvas 打开</ExtLink></td>
@@ -250,7 +258,7 @@ function Files({ id }: { id: string }) {
 function Topics({ id, kind }: { id: string; kind: 'announcements' | 'discussions' }) {
   const { data } = useApi<TopicT[]>(`/api/courses/${enc(id)}/${kind}`);
   const [open, setOpen] = useState<string | null>(null);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   if (data.length === 0) return <Empty glyph={kind === 'announcements' ? '告' : '论'}>{kind === 'announcements' ? '没有公告。' : '没有讨论。'}</Empty>;
   return (
     <div className="stack">
@@ -272,7 +280,7 @@ function Topics({ id, kind }: { id: string; kind: 'announcements' | 'discussions
 
 function Grades({ id }: { id: string }) {
   const { data } = useApi<GradesT>(`/api/courses/${enc(id)}/grades`);
-  if (!data) return <Spinner />;
+  if (!data) return <Loading />;
   return (
     <div className="stack">
       <div className="row">
@@ -289,8 +297,8 @@ function Grades({ id }: { id: string }) {
             {data.items.map((g) => (
               <tr key={g.id}>
                 <td>{g.htmlUrl ? <ExtLink href={g.htmlUrl}>{g.title}</ExtLink> : g.title}</td>
-                <td className="mono small nowrap">{g.dueAt ? fmtDue(g.dueAt) : '—'}</td>
-                <td className="mono nowrap">{g.excused ? '免做' : g.score !== null ? `${g.score} / ${g.points ?? '?'}` : g.points !== null ? `— / ${g.points}` : '—'}</td>
+                <td className="figures small nowrap">{g.dueAt ? fmtDue(g.dueAt) : '—'}</td>
+                <td className="figures nowrap">{g.excused ? '免做' : g.score !== null ? `${g.score} / ${g.points ?? '?'}` : g.points !== null ? `— / ${g.points}` : '—'}</td>
                 <td className="small">{STATUS_LABEL[g.status]}</td>
               </tr>
             ))}
@@ -304,8 +312,14 @@ function Grades({ id }: { id: string }) {
 export function CourseDetail({ id, tab: requested, sub }: { id: string; tab?: string; sub?: string }) {
   const tab = courseTab(requested);
   const { data, error } = useApi<CourseDetailT>(`/api/courses/${enc(id)}`);
+  useDocumentTitle(data?.course.display_name ?? null);
+  // a tab off the edge of a phone's strip (成绩, 学习…) scrolls into sight when it is the open one
+  const tabsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    tabsRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab, !!data]);
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
-  if (!data) return <div className="page"><Spinner /></div>;
+  if (!data) return <div className="page"><Loading /></div>;
   const color = data.course.color ?? data.school?.color ?? '#888';
   return (
     <div className="page" style={{ ['--c' as string]: color }}>
@@ -319,7 +333,7 @@ export function CourseDetail({ id, tab: requested, sub }: { id: string; tab?: st
           <ExtLink href={data.course.html_url} className="btn btn-sm">在 Canvas 打开</ExtLink>
         </div>
       </header>
-      <nav className="tabs" aria-label="课程内容">
+      <nav className="tabs" aria-label="课程内容" ref={tabsRef}>
         {TABS.map((t) => (
           <Link key={t.id} to={t.id === 'study' ? `/study/${id}` : `/courses/${id}/${t.id}`} aria-current={tab === t.id ? 'page' : undefined}>{t.label}</Link>
         ))}
@@ -327,7 +341,7 @@ export function CourseDetail({ id, tab: requested, sub }: { id: string; tab?: st
       <div className="tab-body">
         {tab === 'overview' ? <Overview id={id} detail={data} /> : null}
         {tab === 'assignments' ? <Assignments id={id} /> : null}
-        {tab === 'modules' ? <Modules id={id} /> : null}
+        {tab === 'modules' ? <Modules id={id} currentWeek={data.currentWeek} /> : null}
         {tab === 'pages' ? <Pages id={id} sub={sub} /> : null}
         {tab === 'files' ? <Files id={id} /> : null}
         {tab === 'announcements' ? <Topics id={id} kind="announcements" /> : null}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, refreshAll } from '../api.ts';
 import { fmtRelative } from '../format.ts';
 import type { SchoolView } from '../types.ts';
+import { Icon } from './Icon.tsx';
 import { Badge, ExtLink } from './ui.tsx';
 
 function sinceText(iso: string): string {
@@ -53,7 +54,7 @@ export function SchoolCard({ school, onChanged }: { school: SchoolView; onChange
       <div className="row">
         <div className="grow">
           <div className="row" style={{ gap: 12 }}>
-            <h3 style={{ fontFamily: 'var(--font-zh)', fontSize: 19, letterSpacing: '.03em' }}>{school.name}</h3>
+            <h3 className="school-name">{school.name}</h3>
             <Badge tone={status.tone}>{status.label}</Badge>
             {school.auth_mode === 'token' ? <span className="badge">令牌</span> : null}
           </div>
@@ -88,12 +89,15 @@ export function SchoolCard({ school, onChanged }: { school: SchoolView; onChange
 
       {waiting ? (
         <div className="callout info" style={{ marginTop: 14, alignItems: 'center' }}>
-          <span className="grow">🪟 {login.message}</span>
+          <Icon name="window" size={16} />
+          <span className="grow">{login.message}</span>
           <button type="button" className="btn btn-sm" onClick={() => run('login', () => api(`/api/schools/${school.id}/login`, { method: 'POST' }))}>没看到窗口？重新打开</button>
         </div>
       ) : null}
       {login.status === 'failed' ? <div className="callout bad" style={{ marginTop: 14 }}>{login.message}</div> : null}
-      {login.status === 'success' && school.status === 'ok' ? <div className="callout ok" style={{ marginTop: 14 }}>✓ {login.message}，正在同步数据…</div> : null}
+      {/* only right after logging in: later it would still say "syncing" long after the sync finished */}
+      {login.status === 'success' && school.status === 'ok' && login.startedAt && Date.now() - Date.parse(login.startedAt) < 3 * 60_000
+        ? <div className="callout ok" style={{ marginTop: 14 }}>✓ {login.message}，正在同步数据…</div> : null}
       {school.status !== 'ok' && school.status_detail ? <div className="callout bad" style={{ marginTop: 14 }}>{school.status_detail}</div> : null}
       {school.status === 'ok' && school.failStreak >= 3 ? <div className="callout warn" style={{ marginTop: 14 }}>最近 {school.failStreak} 次同步都有部分失败，详情见下方「同步日志」。</div> : null}
       {error ? <div className="callout bad" style={{ marginTop: 14 }}>{error}</div> : null}

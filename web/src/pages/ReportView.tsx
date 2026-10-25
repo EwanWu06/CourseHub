@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { api, useApi } from '../api.ts';
 import { fmtDue, fmtRelative, weekdayName } from '../format.ts';
+import { Markdown } from '../components/Markdown.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
-import { ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
+import { ErrorNote, ExtLink, Section, Loading } from '../components/ui.tsx';
 import { groupBlocks, hoursText, periodLabel, planMinutes, workloadWidth } from '../lib/reports.ts';
 import { dateKey } from '../lib/tasks.ts';
 import { useReportGenerator } from '../lib/useReportGenerator.ts';
@@ -15,7 +16,7 @@ const hours = (minutes: number) => Math.round(minutes / 30) / 2;
 export function ReportView({ id }: { id: string }) {
   const { data, error, reload } = useApi<ReportDetail>(`/api/reports/${encodeURIComponent(id)}`);
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
-  if (!data) return <div className="page"><Spinner /></div>;
+  if (!data) return <div className="page"><Loading /></div>;
   const afterRegenerate = () => {
     void api<ReportListItem[]>(`/api/reports?type=${data.type}`).then((list) => {
       if (list[0] && list[0].id !== data.id) navigate(`/reports/${list[0].id}`);
@@ -49,15 +50,22 @@ function Header({ detail, kind, canRegenerate, onRegenerated }: { detail: Report
 }
 
 function Stat({ n, label, tone }: { n: ReactNode; label: string; tone?: 'seal' | 'amber' }) {
-  return <div className={`stat ${tone ? `is-${tone}` : ''}`}><div className="n">{n}</div><div className="l">{label}</div></div>;
+  const zero = n === 0; // nothing there: no colour, the figure steps back
+  return <div className={`stat ${tone && !zero ? `is-${tone}` : ''} ${zero ? 'is-zero' : ''}`}><div className="n">{n}</div><div className="l">{label}</div></div>;
 }
+
+/** A score as people write it: 9.35, not 9.3452380952381. */
+const score = (x: number | null | undefined) => (x === null || x === undefined ? '—' : Math.round(x * 100) / 100);
+
+/** The headline sits inside quotation marks: its own full stop would leave the closing mark adrift. */
+const quoted = (text: string) => text.replace(/[。.]\s*$/, '');
 
 function TaskLink({ t, now }: { t: TaskView; now: Date }) {
   return (
     <ExtLink href={t.htmlUrl} className="plan-task">
       <span className="course-chip" style={{ ['--c' as string]: t.color }}><i />{t.courseName}</span>
       <span className="grow">{t.title}</span>
-      <span className="mono small">{fmtDue(t.dueAt, now, { dateOnly: t.dueDateOnly })}</span>
+      <span className="figures small">{fmtDue(t.dueAt, now, { dateOnly: t.dueDateOnly })}</span>
     </ExtLink>
   );
 }
@@ -65,7 +73,7 @@ function TaskLink({ t, now }: { t: TaskView; now: Date }) {
 function Plan({ ai, byId, now }: { ai: DailyAi; byId: Map<string, TaskView>; now: Date }) {
   const groups = groupBlocks(ai.blocks);
   return (
-    <Section num="i." title="今天怎么安排" note={`AI 建议 · 共约 ${hoursText(planMinutes(ai.blocks))}`}>
+    <Section title="今天怎么安排" note={`AI 建议 · 共约 ${hoursText(planMinutes(ai.blocks))}`}>
       {groups.length === 0 ? <p className="muted">今天没有需要安排的。</p> : (
         <div className="plan-grid">
           {groups.map((g) => (
@@ -75,7 +83,7 @@ function Plan({ ai, byId, now }: { ai: DailyAi; byId: Map<string, TaskView>; now
                 const t = b.item_id ? byId.get(b.item_id) : undefined;
                 return (
                   <div key={i} className="plan-block" style={{ ['--c' as string]: t?.color ?? 'var(--rule-strong)' }}>
-                    <div className="row"><b className="grow">{b.title}</b><span className="mono small muted">{b.minutes} 分钟</span></div>
+                    <div className="row"><b className="grow">{b.title}</b><span className="figures small muted">{b.minutes} 分钟</span></div>
                     {t ? <TaskLink t={t} now={now} /> : null}
                     {b.note ? <div className="small muted">{b.note}</div> : null}
                   </div>
@@ -95,10 +103,10 @@ function DailyView({ detail, d, ai, aiError, onRegenerated }: { detail: ReportDe
   const byId = new Map([...d.overdue, ...d.dueToday, ...d.next3Days, ...d.laterThisWeek, ...d.eventsToday, ...d.examsSoon].map((t) => [t.id, t]));
   const news = d.announcements.length + d.grades.length + d.dueChanges.length;
   return (
-    <div className="page report">
+    <div className="page report is-numbered">
       <Header detail={detail} kind="daily" canRegenerate={detail.period === dateKey(now)} onRegenerated={onRegenerated} />
       <section className="report-lead">
-        <p className="lead-headline">{detail.headline}</p>
+        <p className="lead-headline">{quoted(detail.headline)}</p>
         <div className="stats stats-4">
           <Stat n={d.overdue.length} label="逾期 / 缺交" tone="seal" />
           <Stat n={d.dueToday.length} label="今天截止" tone="amber" />
@@ -125,14 +133,14 @@ function DailyView({ detail, d, ai, aiError, onRegenerated }: { detail: ReportDe
               <div key={`due-${c.itemId}`} className="list-row">
                 <span className="badge warn">截止时间变了</span>
                 <span className="grow"><b>{c.courseName}</b> {c.title}</span>
-                <span className="mono small">{fmtDue(c.from, now)} → <b>{fmtDue(c.to, now)}</b></span>
+                <span className="figures small"><span className="nowrap">{fmtDue(c.from, now)}</span> → <b className="nowrap">{fmtDue(c.to, now)}</b></span>
               </div>
             ))}
             {d.grades.map((g) => (
               <div key={`grade-${g.itemId}`} className="list-row">
                 <span className="badge ok">新成绩</span>
                 <span className="grow"><b>{g.courseName}</b> {g.title}</span>
-                <span className="mono small">{g.score ?? '—'}{g.points !== null ? ` / ${g.points}` : ''}</span>
+                <span className="figures small">{score(g.score)}{g.points !== null ? ` / ${g.points}` : ''}</span>
               </div>
             ))}
             {d.announcements.map((a) => (
@@ -152,7 +160,7 @@ function DailyView({ detail, d, ai, aiError, onRegenerated }: { detail: ReportDe
             {d.studyFocus.map((s) => (
               <Link key={s.courseId} to={`/study/${s.courseId}/${s.week}`} className="card card-pad focus-card">
                 <div className="row"><b>{s.courseName}</b><span className="small muted right">第 {s.week} 周</span></div>
-                <p className="small">{s.overview ?? (s.status === 'queued' || s.status === 'running' ? '讲解正在生成…' : '这一周的讲解还没生成，点进去生成。')}</p>
+                {s.overview ? <Markdown text={s.overview} className="small" /> : <p className="small">{s.status === 'queued' || s.status === 'running' ? '讲解正在生成…' : '这一周的讲解还没生成，点进去生成。'}</p>}
               </Link>
             ))}
           </div>
@@ -174,14 +182,14 @@ function WeeklyView({ detail, w, ai, aiError, onRegenerated }: { detail: ReportD
     return dateKey(d);
   })();
   return (
-    <div className="page report">
+    <div className="page report is-numbered">
       <Header detail={detail} kind="weekly" canRegenerate={detail.period >= monday} onRegenerated={onRegenerated} />
       <section className="report-lead">
-        <p className="lead-headline">{detail.headline}</p>
+        <p className="lead-headline">{quoted(detail.headline)}</p>
         <div className="stats">
           <Stat n={deadlines} label="项截止" />
           <Stat n={w.next.exams.length} label="场考试" tone="seal" />
-          <Stat n={hours(total)} label="小时工作量" tone="amber" />
+          <Stat n={hours(total)} label="小时工作量" />
         </div>
       </section>
       {ai ? (
@@ -192,7 +200,7 @@ function WeeklyView({ detail, w, ai, aiError, onRegenerated }: { detail: ReportD
         </div>
       ) : <div className="callout warn">这份周报没有 AI 建议（{aiError}）。下面的安排都直接来自 Canvas。</div>}
 
-      <Section num="i." title="每天要交的" note={w.busiest ? `最忙：${weekdayName(noon(w.busiest))}` : undefined}>
+      <Section title="每天要交的" note={w.busiest ? `最忙：${weekdayName(noon(w.busiest))}` : undefined}>
         <div className="week-strip card">
           {w.next.days.map((d) => {
             const day = noon(d.date);
@@ -201,7 +209,7 @@ function WeeklyView({ detail, w, ai, aiError, onRegenerated }: { detail: ReportD
                 <div className="day-label"><b>{weekdayName(day)}</b><span className="small muted">{day.getMonth() + 1}/{day.getDate()}</span></div>
                 <div className="day-load">
                   <div className="day-bar"><i style={{ width: `${workloadWidth(d.minutes, max)}%` }} /></div>
-                  <span className="mono small muted">{d.minutes ? hoursText(d.minutes) : ''}</span>
+                  <span className="figures small muted">{d.minutes ? hoursText(d.minutes) : ''}</span>
                 </div>
                 <div className="day-items">
                   {d.items.length === 0 ? <span className="small muted">—</span> : d.items.map((t) => (
@@ -218,25 +226,25 @@ function WeeklyView({ detail, w, ai, aiError, onRegenerated }: { detail: ReportD
         </div>
       </Section>
 
-      <Section num="ii." title="考试预警">
+      <Section title="考试预警">
         <TaskList tasks={w.next.exams} now={now} empty="这一周没有考试。" />
       </Section>
 
-      <Section num="iii." title="各课学什么">
+      <Section title="各课学什么">
         {w.next.topics.length === 0 ? <p className="muted">还不知道这一周各课的主题（同步后会自动更新）。</p> : (
           <div className="focus-grid">
             {w.next.topics.map((t) => (
               <Link key={t.courseId} to={`/study/${t.courseId}/${t.week}`} className="card card-pad focus-card">
                 <div className="row"><b>{t.courseName}</b><span className="small muted right">第 {t.week} 周</span></div>
                 {t.topics.length ? <div className="topics">{t.topics.slice(0, 5).map((x) => <span key={x} className="topic">{x}</span>)}</div> : t.title ? <div className="small">{t.title}</div> : null}
-                {t.overview ? <p className="small">{t.overview}</p> : null}
+                {t.overview ? <Markdown text={t.overview} className="small" /> : null}
               </Link>
             ))}
           </div>
         )}
       </Section>
 
-      <Section num="iv." title="上周回顾">
+      <Section title="上周回顾">
         <div className="stats stats-inline">
           <Stat n={w.last.onTime} label="按时交" />
           <Stat n={w.last.late} label="迟交" tone="amber" />
@@ -245,7 +253,7 @@ function WeeklyView({ detail, w, ai, aiError, onRegenerated }: { detail: ReportD
         {w.last.graded.length ? (
           <div className="card list" style={{ marginTop: 12 }}>
             {w.last.graded.map((g, i) => (
-              <div key={i} className="list-row"><span className="badge ok">新成绩</span><span className="grow"><b>{g.courseName}</b> {g.title}</span><span className="mono small">{g.score ?? '—'}{g.points !== null ? ` / ${g.points}` : ''}</span></div>
+              <div key={i} className="list-row"><span className="badge ok">新成绩</span><span className="grow"><b>{g.courseName}</b> {g.title}</span><span className="figures small">{score(g.score)}{g.points !== null ? ` / ${g.points}` : ''}</span></div>
             ))}
           </div>
         ) : null}

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { api, refreshAll, useApi } from '../api.ts';
 import { fmtRelative } from '../format.ts';
-import { Empty, ErrorNote, ExtLink, Masthead, Spinner } from '../components/ui.tsx';
+import { Empty, ErrorNote, ExtLink, Masthead, Loading } from '../components/ui.tsx';
 import { dayLabel, NOTICE_KIND, noticeTarget } from '../lib/notices.ts';
 import { Link } from '../router.tsx';
 
@@ -27,7 +27,7 @@ export function Notices() {
       <Masthead kicker="Notices" title="通知记录" aside={<button type="button" className="btn btn-sm" onClick={() => void test()}>发一条测试通知</button>} />
       <p className="small muted" style={{ marginTop: -8 }}>系统弹出过的每一条通知都在这里，错过了也能补看（保留 60 天）。</p>
       <ErrorNote error={error} />
-      {!data ? <Spinner /> : data.items.length === 0 ? <Empty glyph="铃">还没有通知。截止提醒、日报、新公告都会出现在这里。</Empty> : (
+      {!data ? <Loading /> : data.items.length === 0 ? <Empty glyph="铃">还没有通知。截止提醒、日报、新公告都会出现在这里。</Empty> : (
         <div className="notice-log">
           {data.items.map((n) => {
             const day = dayLabel(n.created_at);

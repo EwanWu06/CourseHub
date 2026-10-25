@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { api } from '../api.ts';
+import { usePresence } from '../lib/presence.ts';
 import { searchEntries } from '../lib/search.ts';
 import type { SearchEntry, SearchGroup } from '../lib/search.ts';
 import { navigate } from '../router.tsx';
@@ -13,6 +14,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
   const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const shown = usePresence(open, 160);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +50,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
     };
   }, [q, open]);
 
-  if (!open) return null;
+  if (!shown.mounted) return null;
   const go = (e: SearchEntry) => {
     onClose();
     if ('internal' in e.target) navigate(e.target.internal);
@@ -70,7 +72,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
 
   let lastGroup = '';
   return (
-    <div className="palette-backdrop" onMouseDown={onClose}>
+    <div className="palette-backdrop" data-state={shown.closing ? 'closing' : 'open'} onMouseDown={onClose}>
       <div className="palette" role="dialog" aria-modal="true" aria-label="搜索" onMouseDown={(e) => e.stopPropagation()}>
         <div className="palette-input">
           <Icon name="search" />
@@ -89,7 +91,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
                 <button type="button" role="option" aria-selected={i === active} className={`palette-item ${i === active ? 'is-active' : ''}`} onMouseEnter={() => setActive(i)} onClick={() => go(e)}>
                   <span className="grow">
                     <span className="palette-title">{e.title}</span>
-                    <span className="small muted">{e.sub}</span>
+                    <span className="small muted palette-sub">{e.color ? <i className="palette-dot" style={{ ['--c' as string]: e.color }} /> : null}{e.sub}</span>
                   </span>
                   {'external' in e.target ? <Icon name="external" size={14} /> : null}
                 </button>

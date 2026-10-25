@@ -20,7 +20,7 @@ test('fileStatus explains what the AI can read', () => {
 
 test('itemTypeIcon covers Canvas module item types', () => {
   for (const t of ['File', 'Page', 'Assignment', 'Quiz', 'Discussion', 'ExternalUrl', 'ExternalTool', 'SubHeader']) assert.ok(itemTypeIcon(t));
-  assert.equal(itemTypeIcon('Unknown'), '•');
+  assert.equal(itemTypeIcon('Unknown'), 'dot');
 });
 
 test('an unknown course tab falls back to the overview', async () => {

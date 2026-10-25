@@ -1,6 +1,6 @@
 import { useApi } from '../api.ts';
 import { fmtDate, fmtRelative } from '../format.ts';
-import { Empty, ErrorNote, Masthead, Spinner } from '../components/ui.tsx';
+import { Empty, ErrorNote, Masthead, Loading } from '../components/ui.tsx';
 import { Link } from '../router.tsx';
 import type { GuideBrief, StudyCourse, StudyCourseDetail } from '../types.ts';
 
@@ -12,13 +12,22 @@ export function guideLabel(g: GuideBrief | null, materials: number): { text: str
   return { text: '生成失败', tone: 'bad' };
 }
 
+/** The term as a ruler of weeks: those behind in the course's pigment, this week in cinnabar, the rest still blank. */
+function TermRuler({ weeks, current }: { weeks: number; current: number }) {
+  return (
+    <div className="term-ruler" style={{ ['--n' as string]: weeks }} aria-hidden="true">
+      {Array.from({ length: weeks }, (_, k) => <i key={k} className={k + 1 < current ? 'is-past' : k + 1 === current ? 'is-now' : ''} />)}
+    </div>
+  );
+}
+
 export function StudyIndex() {
   const { data, error } = useApi<StudyCourse[]>('/api/study');
   return (
     <div className="page">
       <Masthead kicker="Study" title="学习" aside={<span className="small">每门课按周讲解：要学什么、要掌握什么</span>} />
       <ErrorNote error={error} />
-      {!data ? <Spinner /> : data.length === 0 ? <Empty glyph="学">还没有课程。</Empty> : (
+      {!data ? <Loading /> : data.length === 0 ? <Empty glyph="学">还没有课程。</Empty> : (
         <div className="course-grid stagger">
           {data.map((c, i) => (
             <Link key={c.course.id} to={`/study/${c.course.id}`} className="card study-card" style={{ ['--c' as string]: c.course.color ?? c.school?.color ?? '#888', ['--i' as string]: i }}>
@@ -30,6 +39,7 @@ export function StudyIndex() {
                   <span className="big-week">{c.currentWeek && c.currentWeek > 0 ? `第 ${c.currentWeek} 周` : '—'}</span>
                   <span className="small muted">{c.lastWeek ? `共 ${c.lastWeek} 周 · ` : ''}已生成 {c.ready} 周讲解</span>
                 </div>
+                {c.lastWeek ? <TermRuler weeks={c.lastWeek} current={c.currentWeek ?? 0} /> : null}
               </div>
             </Link>
           ))}
@@ -42,7 +52,7 @@ export function StudyIndex() {
 export function StudyCourse({ courseId }: { courseId: string }) {
   const { data, error } = useApi<StudyCourseDetail>(`/api/study/${encodeURIComponent(courseId)}`, { poll: 15_000 });
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
-  if (!data) return <div className="page"><Spinner /></div>;
+  if (!data) return <div className="page"><Loading /></div>;
   const color = data.course.color ?? data.school?.color ?? '#888';
   return (
     <div className="page" style={{ ['--c' as string]: color }}>

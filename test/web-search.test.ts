@@ -21,3 +21,9 @@ test('search results become one list of places to go, in group order', () => {
   assert.deepEqual(entries[3].target, { internal: '/courses/a:101/pages/a%3Ap%3A60' });
   assert.deepEqual(entries[4].target, { internal: '/courses/a:101/announcements' });
 });
+
+test('a result without a course has no dangling separator', () => {
+  const now = new Date('2026-10-12T10:00:00-07:00');
+  const [e] = searchEntries({ groups: [{ kind: 'tasks', items: [{ id: 'a:2', title: 'Old lab', courseName: null, dueAt: '2026-10-13T06:59:00Z', dueDateOnly: false }] }] }, now);
+  assert.equal(e.sub, '今天 23:59');
+});

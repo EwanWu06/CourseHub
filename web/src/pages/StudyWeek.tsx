@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { api, useApi } from '../api.ts';
 import { fmtDate, fmtRelative } from '../format.ts';
+import { Icon } from '../components/Icon.tsx';
 import { Markdown } from '../components/Markdown.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
-import { Empty, ErrorNote, ExtLink, Section, Spinner } from '../components/ui.tsx';
+import { Empty, ErrorNote, ExtLink, Section, Loading, useDocumentTitle } from '../components/ui.tsx';
 import { groupSources, pagesLabel } from '../lib/study.ts';
 import { Link } from '../router.tsx';
 import type { StudyQa, StudyWeekDetail } from '../types.ts';
 
-const KIND_ICON: Record<string, string> = { file: '📄', page: '📃', assignment: '✍️', announcement: '📣', link: '🔗' };
+const KIND_ICON: Record<string, string> = { file: 'file', page: 'page', assignment: 'pencil', announcement: 'megaphone', link: 'link' };
 
 export function StudyWeek({ courseId, week }: { courseId: string; week: number }) {
   const [busy, setBusy] = useState(false);
   const { data, error, reload } = useApi<StudyWeekDetail>(`/api/study/${encodeURIComponent(courseId)}/${week}`, { poll: 6000 });
+  useDocumentTitle(data ? `${data.course.display_name} 第 ${week} 周` : `第 ${week} 周`);
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
-  if (!data) return <div className="page"><Spinner /></div>;
+  if (!data) return <div className="page"><Loading /></div>;
   const g = data.guide;
   const c = g.content;
   const generating = g.queued || g.status === 'queued' || g.status === 'running';
@@ -32,7 +34,7 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
   const relation = new Map((c?.assignments ?? []).map((a) => [a.item_id, a.relation]));
 
   return (
-    <div className="page study-week" style={{ ['--c' as string]: data.course.color ?? data.school?.color ?? '#888' }}>
+    <div className="page study-week is-numbered" style={{ ['--c' as string]: data.course.color ?? data.school?.color ?? '#888' }}>
       <header className="masthead">
         <div>
           <div className="kicker"><Link to="/study">学习</Link> · <Link to={`/study/${courseId}`}>{data.course.display_name}</Link></div>
@@ -64,11 +66,11 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
             {g.generatedAt ? <div className="small muted">由 Claude {g.model ?? ''} 根据课程资料生成 · {fmtRelative(g.generatedAt)}</div> : null}
           </section>
 
-          <Section num="i." title="学习目标">
+          <Section title="学习目标">
             <ul className="objectives">{c.objectives.map((o, i) => <li key={i}><Markdown text={o} /></li>)}</ul>
           </Section>
 
-          <Section num="ii." title="核心概念" note={`${c.concepts.length} 个`}>
+          <Section title="核心概念" note={`${c.concepts.length} 个`}>
             <div className="stack">
               {c.concepts.map((k, i) => (
                 <article key={i} className="card card-pad concept">
@@ -89,9 +91,9 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
             </div>
           </Section>
 
-          {c.cheatsheet ? <Section num="iii." title="必背速查"><div className="card card-pad cheatsheet"><Markdown text={c.cheatsheet} /></div></Section> : null}
+          {c.cheatsheet ? <Section title="必背速查"><div className="card card-pad cheatsheet"><Markdown text={c.cheatsheet} /></div></Section> : null}
 
-          <Section num="iv." title="本周作业与考试">
+          <Section title="本周作业与考试">
             {data.assignments.length ? (
               <>
                 <TaskList tasks={data.assignments} />
@@ -104,7 +106,7 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
             ) : <p className="muted">这一周没有要交的。</p>}
           </Section>
 
-          <Section num="v." title="自测题" note="先自己想，再点开看答案">
+          <Section title="自测题" note="先自己想，再点开看答案">
             <div className="stack">
               {c.self_test.map((q, i) => (
                 <details key={i} className="card quiz">
@@ -115,9 +117,9 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
             </div>
           </Section>
 
-          <Section num="vi." title="学习安排" note={total ? `共约 ${Math.round(total / 6) / 10} 小时` : undefined}>
+          <Section title="学习安排" note={total ? `共约 ${Math.round(total / 6) / 10} 小时` : undefined}>
             <ol className="plan">
-              {c.study_plan.map((p, i) => <li key={i}><span className="grow"><Markdown text={p.step} /></span><span className="mono small">{p.minutes} 分钟</span></li>)}
+              {c.study_plan.map((p, i) => <li key={i}><span className="grow"><Markdown text={p.step} /></span><span className="figures small">{p.minutes} 分钟</span></li>)}
             </ol>
           </Section>
         </div>
@@ -130,9 +132,9 @@ export function StudyWeek({ courseId, week }: { courseId: string; week: number }
           <div className="card list">
             {data.materials.map((m) => (
               <ExtLink key={m.id} href={m.url} className="list-row">
-                <span>{KIND_ICON[m.kind] ?? '•'}</span>
+                <span className="mod-icon" aria-hidden="true"><Icon name={KIND_ICON[m.kind] ?? 'dot'} size={15} /></span>
                 <span className="grow">{m.title}</span>
-                <span className="small muted">{m.pages ? `${m.pages} 页` : ''}{m.scanned ? ' · 扫描版' : ''}{!m.hasText && m.kind !== 'link' ? ' · 未读取到文字' : ''}</span>
+                <span className="small muted">{[m.pages ? `${m.pages} 页` : '', m.scanned ? '扫描版' : '', !m.hasText && m.kind !== 'link' ? '未读取到文字' : ''].filter(Boolean).join(' · ')}</span>
               </ExtLink>
             ))}
           </div>

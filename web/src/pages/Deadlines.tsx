@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useApi } from '../api.ts';
 import { useLocation } from '../router.tsx';
 import { AddTask } from '../components/AddTask.tsx';
 import { MonthCalendar } from '../components/MonthCalendar.tsx';
 import { TaskList } from '../components/TaskRow.tsx';
-import { Empty, ErrorNote, Masthead, Section, Spinner } from '../components/ui.tsx';
-import { fmtDate } from '../format.ts';
+import { Empty, ErrorNote, Masthead, Section, Loading } from '../components/ui.tsx';
+import { fmtDate, weekdayName } from '../format.ts';
+import { zhMonth } from '../lib/almanac.ts';
 import { dateKey, groupByDay } from '../lib/tasks.ts';
 import type { CourseCard, SchoolView, TaskView } from '../types.ts';
+
+const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const KINDS: { id: string; label: string; match: (t: TaskView) => boolean }[] = [
   { id: 'all', label: '全部类别', match: () => true },
@@ -82,26 +85,40 @@ export function Deadlines() {
         <label className="row small"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> 显示已完成 / 已过</label>
       </div>
       <ErrorNote error={items.error} />
-      {!items.data ? <Spinner /> : view === 'list' ? (
+      {!items.data ? <Loading /> : view === 'list' ? (
         groups.length === 0 ? <Empty glyph="闲">这段时间没有符合条件的截止日期。</Empty> : (
           <div className="day-groups">
-            {groups.map((g) => (
-              <section key={g.key} className={`day ${g.key < todayKey ? 'past' : ''}`}>
-                <div className="day-head">
-                  {g.rel ? <span className="rel">{g.rel}</span> : null}
-                  <span className="date">{g.date}</span>
-                  <span className="n">{g.tasks.length} 项</span>
-                </div>
-                <TaskList tasks={g.tasks} now={now} showDate={false} />
-              </section>
-            ))}
+            {groups.map((g, i) => {
+              const d = new Date(`${g.key}T12:00:00`);
+              // an almanac turns the page at each new month (the current month needs no heading)
+              const month = g.key.slice(0, 7);
+              const newMonth = i === 0 ? month !== todayKey.slice(0, 7) : month !== groups[i - 1].key.slice(0, 7);
+              return (
+                <Fragment key={g.key}>
+                  {newMonth ? (
+                    <div className="month-rule">
+                      <span>{d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()} 年 ` : ''}{zhMonth(d.getMonth() + 1)}</span>
+                      <span className="month-en">{MONTH_EN[d.getMonth()]}</span>
+                    </div>
+                  ) : null}
+                  <section className={`day ${g.key < todayKey ? 'past' : ''} ${g.key === todayKey ? 'is-today' : ''}`} aria-label={g.rel ? `${g.rel} ${g.date}` : g.date}>
+                    <div className="day-head">
+                      <span className="day-n">{d.getDate()}</span>
+                      <span className="day-w">{weekdayName(d)}{g.rel ? <b className="day-rel">{g.rel}</b> : null}</span>
+                      <span className={`n ${g.tasks.length === 1 ? 'is-one' : ''}`}>{g.tasks.length} 项</span>
+                    </div>
+                    <TaskList tasks={g.tasks} now={now} showDate={false} exitOnDone={!showDone} />
+                  </section>
+                </Fragment>
+              );
+            })}
           </div>
         )
       ) : (
         <>
-          <div className="row" style={{ marginBottom: 12 }}>
+          <div className="cal-nav">
             <button type="button" className="btn btn-sm" onClick={() => setCursor(({ y, m }) => (m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 }))}>‹ 上个月</button>
-            <h2 style={{ fontFamily: 'var(--font-zh)', fontSize: 20, margin: '0 8px' }}>{cursor.y} 年 {cursor.m + 1} 月</h2>
+            <h2 className="cal-title">{cursor.y} 年 {cursor.m + 1} 月</h2>
             <button type="button" className="btn btn-sm" onClick={() => setCursor(({ y, m }) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }))}>下个月 ›</button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setCursor({ y: now.getFullYear(), m: now.getMonth() }); setSelected(todayKey); }}>回到今天</button>
           </div>
@@ -115,7 +132,7 @@ export function Deadlines() {
       )}
       {undatedList.length ? (
         <Section title="无截止日期" note="老师没设截止时间，但需要完成">
-          <TaskList tasks={undatedList} now={now} />
+          <TaskList tasks={undatedList} now={now} exitOnDone={!showDone} />
         </Section>
       ) : null}
       <AddTask open={adding} onClose={() => setAdding(false)} courses={courses.data ?? []} />

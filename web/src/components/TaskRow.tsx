@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, refreshAll } from '../api.ts';
 import { fmtCountdown, fmtDue } from '../format.ts';
+import { reducedMotion } from '../lib/motion.ts';
+import { showToast } from '../lib/toast.ts';
 import { CATEGORY_LABEL, KIND_LABEL, STATUS_LABEL, providerNote, reqChips, sealFor } from '../lib/tasks.ts';
 import { Link } from '../router.tsx';
 import type { TaskView } from '../types.ts';
@@ -51,14 +53,16 @@ function CategoryChip({ task }: { task: TaskView }) {
   );
 }
 
-export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: { task: TaskView; now?: Date; showDate?: boolean; index?: number }) {
+/** `exitOnDone`: the list hides done work (Today), so a row ticked here leaves after its stamp. */
+export function TaskRow({ task, now = new Date(), showDate = true, index = 0, exitOnDone = false }: { task: TaskView; now?: Date; showDate?: boolean; index?: number; exitOnDone?: boolean }) {
   const [localDone, setLocalDone] = useState(task.localDone);
   useEffect(() => setLocalDone(task.localDone), [task.localDone]);
   const doneElsewhere = task.status === 'done' && !task.localDone;
   const done = doneElsewhere || localDone;
   const isEvent = task.kind === 'event';
   const seal = done ? null : sealFor(task, now);
-  const countdown = done || isEvent || task.dueDateOnly ? null : fmtCountdown(task.dueAt, now); // no fake 23:59 countdowns
+  // no fake 23:59 countdowns; and work that needed no hand-in is 已过 (below), never 已逾期
+  const countdown = done || isEvent || task.dueDateOnly || task.status === 'past' ? null : fmtCountdown(task.dueAt, now);
   const note = providerNote(task.provider);
   const [userNote, setUserNote] = useState(task.note);
   const [editing, setEditing] = useState(false);
@@ -79,42 +83,90 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
     }
   };
 
+  // the stamp animation plays only when ticked here, not for work that loads already done
+  const [stamped, setStamped] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const stay = () => {
+    setLeaving(false);
+    if (rowRef.current) rowRef.current.style.height = '';
+  };
+  useEffect(stay, [task]);
+  const timers = useRef<number[]>([]);
+  const clearTimers = () => {
+    timers.current.forEach((id) => clearTimeout(id));
+    timers.current = [];
+  };
+  useEffect(() => clearTimers, []);
+
   const toggle = async () => {
+    clearTimers(); // ticked and unticked again quickly: the first tick's exit must not play
+    stay();
     const next = !localDone;
     setLocalDone(next);
+    setStamped(next);
     try {
       await api(`/api/items/${encodeURIComponent(task.id)}`, { method: 'PATCH', body: { localDone: next } });
-      refreshAll();
+      if (next) showToast({ text: `已完成「${task.title}」`, action: { label: '撤销', run: () => void undo() } });
+      if (next && !reducedMotion()) {
+        // let the stamp land, then fold the row away (from its own height, so the rows below slide up instead of jumping)
+        if (exitOnDone) {
+          timers.current.push(window.setTimeout(() => {
+            const el = rowRef.current;
+            if (el) {
+              el.style.height = `${el.offsetHeight}px`;
+              void el.offsetHeight;
+            }
+            setLeaving(true);
+          }, 800));
+        }
+        timers.current.push(window.setTimeout(() => {
+          setStamped(false);
+          refreshAll();
+        }, exitOnDone ? 1100 : 900));
+      } else {
+        setStamped(false);
+        refreshAll();
+      }
     } catch {
       setLocalDone(!next);
+      setStamped(false);
+    }
+  };
+
+  const undo = async () => {
+    try {
+      await api(`/api/items/${encodeURIComponent(task.id)}`, { method: 'PATCH', body: { localDone: false } });
+    } finally {
+      refreshAll();
     }
   };
 
   return (
-    <div className={`task ${done ? 'is-done' : ''}`} style={{ ['--c' as string]: task.color, ['--i' as string]: index }}>
+    <div ref={rowRef} className={`task ${done ? 'is-done' : ''} ${stamped ? 'is-stamped' : ''} ${leaving ? 'is-leaving' : ''}`} style={{ ['--c' as string]: task.color, ['--i' as string]: index }}>
       {isEvent ? (
         <span className="check event" aria-hidden="true">◆</span>
       ) : (
-        <button type="button" className="check" role="checkbox" aria-checked={done} disabled={doneElsewhere}
+        <button type="button" className="check" role="checkbox" aria-checked={done} disabled={doneElsewhere} aria-label={task.title}
           title={doneElsewhere ? '已在 Canvas 完成' : done ? '标记为未完成' : '在本地标记为已完成（不影响 Canvas）'} onClick={toggle}>
-          <Icon name="check" size={13} />
+          {done ? <span className="stamp" aria-hidden="true">完</span> : <Icon name="check" size={13} />}
         </button>
       )}
       <div className="task-body">
-        <div className="task-title">{task.title}</div>
+        <div className="task-title"><span className="task-title-text">{task.title}</span></div>
         <div className="task-meta">
           {task.courseName ? (
             <Link to={`/courses/${task.courseId}`} className="course-chip"><i />{task.courseName}</Link>
           ) : task.schoolName ? <span className="course-chip"><i />{task.schoolName}</span> : null}
           <CategoryChip task={task} />
-          {task.points ? <span className="mono">{task.points} 分</span> : null}
+          {task.points ? <span className="figures">{task.points} 分</span> : null}
           {note ? <span className="provider">{note}</span> : null}
           {task.source === 'ics' ? <span title="登录过期期间来自日历订阅，提交状态未知">日历订阅</span> : null}
           {!userNote && !editing ? <button type="button" className="add-note" onClick={() => { setDraft(''); setEditing(true); }}>＋备注</button> : null}
         </div>
         <Requirements task={task} />
-        {task.syllabusNote ? <div className="syllabus-note">📅 {task.syllabusNote}</div> : null}
-        {task.dueNote ? <div className="syllabus-note">📅 {task.dueNote}</div> : null}
+        {task.syllabusNote ? <div className="syllabus-note"><Icon name="calendar" size={12} />{task.syllabusNote}</div> : null}
+        {task.dueNote ? <div className="syllabus-note"><Icon name="calendar" size={12} />{task.dueNote}</div> : null}
         {editing ? (
           <input className="note-input" autoFocus value={draft} maxLength={300} placeholder="写一句备注，比如：带计算器 / 要打印出来交" aria-label="备注"
             onChange={(e) => setDraft(e.target.value)} onBlur={() => void saveNote()}
@@ -137,7 +189,7 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
         </div>
         {seal ? <span className="seal" title={STATUS_LABEL[task.status]}>{seal}</span> : null}
         {task.htmlUrl ? (
-          <a className="btn btn-sm btn-ghost open" href={task.htmlUrl} target="_blank" rel="noopener noreferrer" title="在 Canvas 打开">
+          <a className="btn btn-sm btn-ghost open" href={task.htmlUrl} target="_blank" rel="noopener noreferrer" title="在 Canvas 打开" aria-label={`在 Canvas 打开：${task.title}`}>
             <Icon name="external" size={14} />
           </a>
         ) : null}
@@ -146,11 +198,11 @@ export function TaskRow({ task, now = new Date(), showDate = true, index = 0 }: 
   );
 }
 
-export function TaskList({ tasks, now, showDate = true, empty, dense = false }: { tasks: TaskView[]; now?: Date; showDate?: boolean; empty?: string; dense?: boolean }) {
+export function TaskList({ tasks, now, showDate = true, empty, dense = false, exitOnDone = false }: { tasks: TaskView[]; now?: Date; showDate?: boolean; empty?: string; dense?: boolean; exitOnDone?: boolean }) {
   if (tasks.length === 0) return empty ? <p className="muted small" style={{ margin: '4px 0 0' }}>{empty}</p> : null;
   return (
     <div className={`card tasks stagger ${dense ? 'dense' : ''}`}>
-      {tasks.map((t, i) => <TaskRow key={t.id} task={t} now={now} showDate={showDate} index={i} />)}
+      {tasks.map((t, i) => <TaskRow key={t.id} task={t} now={now} showDate={showDate} index={i} exitOnDone={exitOnDone} />)}
     </div>
   );
 }

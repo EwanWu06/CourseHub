@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, refreshAll, useApi } from '../api.ts';
 import { fmtBytes, fmtRelative } from '../format.ts';
-import { ErrorNote, Masthead, Section, Spinner } from '../components/ui.tsx';
+import { ErrorNote, Masthead, Section, Loading } from '../components/ui.tsx';
 import { Link } from '../router.tsx';
 import type { StatusIssue, SystemStatus } from '../types.ts';
 
@@ -39,9 +39,9 @@ export function Status() {
   };
 
   if (error) return <div className="page"><ErrorNote error={error} /></div>;
-  if (!data) return <div className="page"><Spinner /></div>;
+  if (!data) return <div className="page"><Loading /></div>;
   return (
-    <div className="page">
+    <div className="page is-numbered">
       <Masthead kicker="System" title="系统状态" aside={<span className="small muted">版本 {data.app.version} · 已运行 {fmtRelative(data.app.startedAt).replace('前', '')}</span>} />
       {done ? <div className="callout info" role="status">{done}</div> : null}
       {data.issues.length === 0 ? (
@@ -57,18 +57,19 @@ export function Status() {
         </div>
       )}
 
-      <Section num="i." title="学校">
+      <Section title="学校">
         <div className="card list">
           {data.schools.map((s) => {
             const st = SCHOOL_STATE[s.status] ?? { text: s.status, tone: '' };
             return (
               <div key={s.id} className="list-row status-row" style={{ ['--c' as string]: s.color }}>
-                <span className="dot" style={{ background: s.color }} />
+                <span className="dot" style={{ ['--c' as string]: s.color }} />
                 <b className="status-name">{s.name}</b>
                 <span className={`badge ${st.tone}`}>{st.text}</span>
                 <span className="grow small muted">
-                  {s.authMode === 'token' ? '用访问令牌' : <>登录于 {fmtRelative(s.loginAt)} · 最近确认 {fmtRelative(s.aliveAt)}{s.renewals ? ` · 已自动续期 ${s.renewals} 次` : ''}</>}
-                  {' · '}上次同步成功 {fmtRelative(s.lastOkAt)}{s.icsFallback ? ' · 有日历订阅兜底' : ''}
+                  {/* each clause holds together; lines break only between them */}
+                  {s.authMode === 'token' ? '用访问令牌' : <><span className="nowrap">登录于 {fmtRelative(s.loginAt)}</span> · <span className="nowrap">最近确认 {fmtRelative(s.aliveAt)}</span>{s.renewals ? <> · <span className="nowrap">已自动续期 {s.renewals} 次</span></> : null}</>}
+                  {' · '}<span className="nowrap">上次同步成功 {fmtRelative(s.lastOkAt)}</span>{s.icsFallback ? <> · <span className="nowrap">有日历订阅兜底</span></> : null}
                   {s.statusDetail ? <span className="block">{s.statusDetail}</span> : null}
                   {s.checks ? (
                     s.checks.problems.length === 0 ? (
@@ -87,7 +88,7 @@ export function Status() {
         </div>
       </Section>
 
-      <Section num="ii." title="后台任务" note="错过的（比如电脑睡着了）会在醒来后补跑">
+      <Section title="后台任务" note="错过的（比如电脑睡着了）会在醒来后补跑">
         <div className="card list">
           {data.jobs.map((j) => {
             const st = j.lastStatus ? JOB_STATE[j.lastStatus] ?? { text: j.lastStatus, tone: '' } : { text: '还没运行', tone: '' };
@@ -103,7 +104,7 @@ export function Status() {
       </Section>
 
       <div className="status-grid">
-        <Section num="iii." title="AI">
+        <Section title="AI">
           <div className="card card-pad small">
             <p>{data.ai.enabled ? `已开启 · 模型 ${data.ai.model}` : 'AI 已关闭（日报、周报照常生成，只是没有 AI 安排）'}</p>
             <p>今天调用 <b>{data.ai.today.calls}</b> 次{data.ai.today.failed ? `（失败 ${data.ai.today.failed} 次）` : ''} · 读入 {kTokens(data.ai.today.inputTokens)} / 写出 {kTokens(data.ai.today.outputTokens)} tokens</p>
@@ -111,7 +112,7 @@ export function Status() {
             <p className="muted">用的是你的 Claude 订阅（claude 命令），不走按量计费的 API。</p>
           </div>
         </Section>
-        <Section num="iv." title="备份" note="每天 3:30，保留 14 天">
+        <Section title="备份" note="每天 3:30，保留 14 天">
           <div className="card card-pad small">
             {data.backups.length === 0 ? <p className="muted">还没有备份。</p> : (
               <p>最近：<b>{data.backups[0].date}</b>（{fmtBytes(data.backups[0].bytes)}），共 {data.backups.length} 份</p>
@@ -120,7 +121,7 @@ export function Status() {
             <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => void backup()}>{busy === 'backup' ? '备份中…' : '立即备份'}</button>
           </div>
         </Section>
-        <Section num="v." title="通知">
+        <Section title="通知">
           <div className="card card-pad small">
             <p>{data.notifier.applet ? '通知小程序已安装：点通知会直接打开对应页面。' : '通知小程序没装，用的是系统默认通知。'}</p>
             <p className="muted">第一次收到通知时 macOS 可能会问是否允许，选「允许」。错过的通知都在 <Link to="/notices">通知记录</Link> 里。</p>
@@ -128,7 +129,7 @@ export function Status() {
           </div>
         </Section>
         {data.platforms.length ? (
-          <Section num="vi." title="外部平台" note="Canvas 里只有成绩栏的作业平台，直接去平台读">
+          <Section title="外部平台" note="Canvas 里只有成绩栏的作业平台，直接去平台读">
             <div className="card card-pad small">
               {data.platforms.map((p) => (
                 <p key={`${p.courseId}:${p.platform}`}>
@@ -141,9 +142,9 @@ export function Status() {
           </Section>
         ) : null}
         {data.clientErrors.length ? (
-          <Section num="vii." title="最近网页错误" note="重启后清空">
+          <Section title="最近网页错误" note="重启后清空">
             <div className="card card-pad small">
-              {data.clientErrors.map((e, i) => <p key={i}><span className="mono">{e.path}</span> · {fmtRelative(e.at, new Date())}：{e.message}</p>)}
+              {data.clientErrors.map((e, i) => <p key={i}><span className="figures">{e.path}</span> · {fmtRelative(e.at, new Date())}：{e.message}</p>)}
               <p className="muted">出错的那一页会显示提示，其他页面不受影响。</p>
             </div>
           </Section>

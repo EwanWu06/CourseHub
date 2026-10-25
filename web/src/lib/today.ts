@@ -5,6 +5,11 @@ import type { TaskView } from '../types.ts';
 const dayIndex = (d: Date) => Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
 const daysUntil = (iso: string, now: Date) => dayIndex(new Date(iso)) - dayIndex(now);
 
+/** Whole calendar days from today to the day of `iso` (0 = today), in local time. */
+export function examDaysUntil(iso: string, now: Date = new Date()): number {
+  return daysUntil(iso, now);
+}
+
 /** "今天" / "明天" / "后天" / "8 天后" */
 export function examCountdown(iso: string, now: Date = new Date()): string {
   const d = daysUntil(iso, now);

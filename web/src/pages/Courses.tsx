@@ -1,8 +1,15 @@
 import { useApi } from '../api.ts';
 import { fmtCountdown, fmtDue } from '../format.ts';
-import { Empty, ErrorNote, Masthead, Spinner } from '../components/ui.tsx';
+import { Empty, ErrorNote, Masthead, Loading } from '../components/ui.tsx';
 import { Link, navigate } from '../router.tsx';
 import type { CourseCard } from '../types.ts';
+
+/** Red within a day (or late), amber within two, otherwise quiet: the colours mean the same here as on Today. */
+function urgency(iso: string | null, now: Date): string {
+  if (!iso) return 'muted';
+  const h = (Date.parse(iso) - now.getTime()) / 3_600_000;
+  return h < 24 ? 'hot' : h < 48 ? 'warm' : 'muted';
+}
 
 export function Courses() {
   const { data, error } = useApi<CourseCard[]>('/api/courses');
@@ -16,11 +23,11 @@ export function Courses() {
     <div className="page">
       <Masthead kicker="Courses" title="课程" aside={<Link to="/inbox" className="btn btn-sm">收件箱</Link>} />
       <ErrorNote error={error} />
-      {!data ? <Spinner /> : data.length === 0 ? <Empty glyph="课">还没有课程。去「设置」添加学校并登录。</Empty> : (
+      {!data ? <Loading /> : data.length === 0 ? <Empty glyph="课">还没有课程。去「设置」添加学校并登录。</Empty> : (
         [...bySchool.entries()].map(([school, cards]) => (
           <section key={school} className="section">
             <div className="section-head">
-              <span className="dot-lg" style={{ background: cards[0].school?.color }} />
+              <span className="dot-lg" style={{ ['--c' as string]: cards[0].school?.color }} />
               <h2>{school}</h2>
               <span className="note">{cards.length} 门课</span>
             </div>
@@ -51,7 +58,7 @@ export function Courses() {
                         <div className="next-due">
                           <div className="small muted">下一项</div>
                           <div className="next-title">{due.title}</div>
-                          <div className="small"><span className="mono">{fmtDue(due.dueAt, now, { dateOnly: due.dueDateOnly })}</span>{!due.dueDateOnly && fmtCountdown(due.dueAt, now) ? <span className="hot"> · {fmtCountdown(due.dueAt, now)}</span> : null}</div>
+                          <div className="small"><span className="figures">{fmtDue(due.dueAt, now, { dateOnly: due.dueDateOnly })}</span>{!due.dueDateOnly && fmtCountdown(due.dueAt, now) ? <span className={urgency(due.dueAt, now)}> · {fmtCountdown(due.dueAt, now)}</span> : null}</div>
                         </div>
                       ) : <div className="small muted">近期没有要交的</div>}
                       <div className="row small muted" style={{ marginTop: 12 }}>

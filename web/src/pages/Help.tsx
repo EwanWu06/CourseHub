@@ -17,7 +17,7 @@ function Term({ k, children }: { k: ReactNode; children: ReactNode }) {
 
 export function Help() {
   return (
-    <div className="page help">
+    <div className="page help is-numbered">
       <Masthead kicker="Help" title="帮助" />
 
       <section className="section">
@@ -35,15 +35,17 @@ export function Help() {
         <div className="section-head"><h2>标签和状态是什么意思</h2></div>
         <div className="card card-pad terms">
           <Term k={<span className="seal seal-sm">考</span>}>考试或测验（看的是真实分类，不只是 Canvas 里的类型；比如化学的 Knowledge Check 是考试，章节 Homework 是作业）。分类不对可以点标签改。</Term>
-          <Term k={<span className="badge">大纲</span>}>这个日期是从课程大纲（syllabus）里读出来的，Canvas 上没写；任务下面会附上大纲原文，方便核对。</Term>
-          <Term k={<span className="badge warn">逾期</span>}>过了截止时间、Canvas 上还没交。</Term>
-          <Term k={<span className="badge bad">缺交</span>}>老师在 Canvas 里标了 missing。</Term>
-          <Term k={<span className="badge">已过</span>}>已经过去、不需要在网上提交的（比如纸质作业、课堂考试）。</Term>
-          <Term k={<span className="small" style={{ color: 'var(--amber)' }}>外部工具 · 以平台为准</span>}>在 Macmillan Learning 等外部平台完成的作业，完成情况以那个平台为准。</Term>
-          <Term k={<span className="small" style={{ color: 'var(--amber)' }}>Achieve</span>}>直接从 Macmillan Achieve 读来的作业（Canvas 里只有「Achieve Category」成绩栏，具体作业和截止时间都在 Achieve）：截止时间和完成情况就是 Achieve 自己的。点开会经 Canvas 进入 Achieve。</Term>
-          <Term k={<span className="badge">开放到</span>}>Canvas 上没写截止日期，只写了「开放到」：过了这个时间就交不了，所以按它算截止。</Term>
-          <Term k={<span className="badge">同伴互评</span>}>Canvas 分给你的同伴互评（peer review），评完 Canvas 会自动算完成。</Term>
-          <Term k={<span className="badge">日程</span>}>Canvas 日历里的活动，不用交东西。</Term>
+          <Term k={<span className="seal seal-sm">急</span>}>24 小时内要交、还没交的。</Term>
+          <Term k={<span className="seal seal-sm">逾</span>}>过了截止时间、Canvas 上还没交。</Term>
+          <Term k={<span className="seal seal-sm">缺</span>}>老师在 Canvas 里标了 missing。</Term>
+          <Term k={<span className="stamp">完</span>}>已完成：Canvas 上交了，或者你点了左边的圆圈（只记在本机）。</Term>
+          <Term k={<span className="from-syllabus">大纲</span>}>这个日期是从课程大纲（syllabus）里读出来的，Canvas 上没写；任务下面会附上大纲原文，方便核对。</Term>
+          <Term k={<span className="small muted">已过</span>}>已经过去、不需要在网上提交的（比如纸质作业、课堂考试）。</Term>
+          <Term k={<span className="small provider">外部工具 · 以平台为准</span>}>在 Macmillan Learning 等外部平台完成的作业，完成情况以那个平台为准。</Term>
+          <Term k={<span className="small provider">Achieve</span>}>直接从 Macmillan Achieve 读来的作业（Canvas 里只有「Achieve Category」成绩栏，具体作业和截止时间都在 Achieve）：截止时间和完成情况就是 Achieve 自己的。点开会经 Canvas 进入 Achieve。</Term>
+          <Term k={<span className="from-syllabus">开放到</span>}>Canvas 上没写截止日期，只写了「开放到」：过了这个时间就交不了，所以按它算截止。</Term>
+          <Term k={<span className="small">同伴互评</span>}>Canvas 分给你的同伴互评（peer review），评完 Canvas 会自动算完成。</Term>
+          <Term k={<span className="small">日程</span>}>Canvas 日历里的活动，不用交东西。</Term>
           <Term k={<><span className="req is-met">首帖 ✓</span> <span className="req is-short">回复 1/2</span></>}>拿满分要做的几步，和你做到哪了。讨论帖在 Canvas 里发了第一帖就算「已交」，但老师要求的回复没回够，这里就还算没完成、照样提醒。回复按不同的同学算（同一个人只算一次，回复老师不算）。鼠标停在上面能看到作业说明里的原句。</Term>
           <Term k={<span className="req is-short">互评 0/3</span>}>老师单独设了互评成绩栏时，数你评完了几份；分给你的互评按那一栏的截止时间算。</Term>
           <Term k={<span className="req is-short">分数 10/12</span>}>模块要求的最低分：分数不够，Canvas 不算你完成这个模块，后面的模块可能打不开，所以就算已出分也还算没完成。</Term>
