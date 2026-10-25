@@ -145,6 +145,23 @@ test('Canvas becoming unreachable mid-sync stops the sync at once; nothing is re
   }
 });
 
+test('a school whose login isn\'t on this Mac (moved over without logins) asks for one, once; the calendar feed still syncs', async () => {
+  const { db, mock, schoolId } = await setup('alpha', { auth: false });
+  try {
+    updateSchool(db, schoolId, { status: 'ok', ics_url: `${mock.baseUrl}/feeds/calendars/user_alpha-ics-token.ics`, login_at: '2026-10-13T01:58:23.540Z' });
+    let asked = 0;
+    const stats = await syncSchool(db, schoolId, { reason: 'test', relogin: null, onLoginNeeded: () => { asked++; } });
+    assert.equal(stats.mode, 'ics');
+    assert.ok(stats.items > 0, 'deadlines still come from the calendar feed');
+    assert.equal(getSchool(db, schoolId)!.status, 'needs_login');
+    assert.match(getSchool(db, schoolId)!.status_detail!, /还没有登录/);
+    await syncSchool(db, schoolId, { reason: 'test', relogin: null, onLoginNeeded: () => { asked++; } });
+    assert.equal(asked, 1, 'asked once, not every sync');
+  } finally {
+    await done(mock);
+  }
+});
+
 test('one assignment seen by the assignments API, planner and ICS is stored once', async () => {
   const { db, mock, schoolId } = await setup('alpha');
   try {

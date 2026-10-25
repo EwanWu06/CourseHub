@@ -143,7 +143,16 @@ export async function syncSchool(db: DB, schoolId: string, opts: SyncOptions): P
   let client = makeClient(school, opts.client);
   try {
     if (!client) {
-      await icsOnly(db, school, now, stats);
+      // No login saved on this Mac (moved over from another one: logins aren't copied): ask for one once, rather than
+      // quietly getting by on the calendar feed while the page still says the login is being kept
+      if (school.status !== 'new' && school.status !== 'needs_login') {
+        updateSchool(db, schoolId, {
+          status: 'needs_login',
+          status_detail: school.auth_mode === 'token' ? '这台电脑上还没有保存访问令牌，请在设置里填写' : '这台电脑上还没有登录这所学校，请点「登录」',
+        });
+        opts.onLoginNeeded?.(getSchool(db, schoolId)!);
+      }
+      await icsOnly(db, getSchool(db, schoolId)!, now, stats);
     } else {
       try {
         await apiSync(db, school, client, now, stats, opts);
