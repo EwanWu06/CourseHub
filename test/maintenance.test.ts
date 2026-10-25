@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpDataDir } from './helpers.ts';
+import { tmpDataDir, scratchDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
 import { createSchool } from '../src/db/schools.ts';
 import { upsertCourse } from '../src/db/courses.ts';
@@ -75,7 +74,7 @@ test('database upkeep checkpoints the WAL and runs without error', () => {
 });
 
 test('the browser cache is trimmed but logins (cookies, local storage) are kept — and never while Chrome runs', () => {
-  const profile = mkdtempSync(path.join(tmpdir(), 'profile-'));
+  const profile = scratchDir('profile-');
   const mk = (p: string) => {
     mkdirSync(path.join(profile, p), { recursive: true });
     writeFileSync(path.join(profile, p, 'data'), 'x'.repeat(1000));

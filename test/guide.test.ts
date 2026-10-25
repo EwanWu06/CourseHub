@@ -1,9 +1,8 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpDataDir } from './helpers.ts';
+import { tmpDataDir, scratchDir } from './helpers.ts';
 import { startMockCanvas } from '../mock/server.ts';
 import type { MockCanvas } from '../mock/server.ts';
 import { openDb } from '../src/db/index.ts';
@@ -33,8 +32,8 @@ before(async () => {
 });
 after(() => mock.close());
 beforeEach(() => {
-  rec = mkdtempSync(path.join(tmpdir(), 'fake-claude-'));
-  queue = mkdtempSync(path.join(tmpdir(), 'fake-claude-q-'));
+  rec = scratchDir('fake-claude-');
+  queue = scratchDir('fake-claude-q-');
   process.env.FAKE_CLAUDE_DIR = rec;
   process.env.FAKE_CLAUDE_QUEUE = queue;
   process.env.FAKE_CLAUDE_MODE = 'ok';

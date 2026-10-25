@@ -14,10 +14,16 @@ process.on('exit', () => {
   for (const dir of created) rmSync(dir, { recursive: true, force: true });
 });
 
+/** A throwaway directory in the system temp folder, removed when the test process exits. */
+export function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  created.push(dir);
+  return dir;
+}
+
 /** Creates a throwaway data dir and points COURSEHUB_DATA_DIR at it. Removed on process exit. */
 export function tmpDataDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), 'coursehub-test-'));
-  created.push(dir);
+  const dir = scratchDir('coursehub-test-');
   process.env.COURSEHUB_DATA_DIR = dir;
   return dir;
 }

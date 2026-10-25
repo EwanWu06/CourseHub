@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { killOrphans } from '../src/watchdog.ts';
+import { scratchDir } from './helpers.ts';
 
 const CHILD = path.join(import.meta.dirname, 'fixtures', 'watchdog-child.ts');
 
 function runChild(mode: 'hang' | 'idle' | 'sleepy', onReady?: (pid: number) => void) {
-  const note = path.join(mkdtempSync(path.join(tmpdir(), 'wd-')), 'watchdog.json');
+  const note = path.join(scratchDir('wd-'), 'watchdog.json');
   const child = fork(CHILD, [mode, note], { execArgv: ['--disable-warning=ExperimentalWarning'], stdio: 'ignore' });
   child.on('message', () => onReady?.(child.pid!));
   const done = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
@@ -65,7 +65,7 @@ test('after a watchdog restart the reason is kept in the notice history, once', 
   const { writeFileSync } = await import('node:fs');
   tmpDataDir();
   const db = openDb();
-  const note = path.join(mkdtempSync(path.join(tmpdir(), 'wd-')), 'watchdog.json');
+  const note = path.join(scratchDir('wd-'), 'watchdog.json');
   writeFileSync(note, JSON.stringify({ reason: 'hang', stuckSeconds: 121.4, at: '2026-10-13T10:12:00.000Z' }));
   assert.equal(consumeWatchdogNote(db, note), true);
   const n = listNotices(db, 10)[0];

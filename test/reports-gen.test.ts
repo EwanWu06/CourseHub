@@ -1,9 +1,8 @@
 import { test, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpDataDir } from './helpers.ts';
+import { tmpDataDir, scratchDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool } from '../src/db/schools.ts';
@@ -30,8 +29,8 @@ const NOW = new Date('2026-11-01T16:00:00Z'); // Sun Nov 1, 08:00 PST
 beforeEach(() => {
   tmpDataDir();
   db = openDb();
-  rec = mkdtempSync(path.join(tmpdir(), 'fake-claude-'));
-  queue = mkdtempSync(path.join(tmpdir(), 'fake-claude-q-'));
+  rec = scratchDir('fake-claude-');
+  queue = scratchDir('fake-claude-q-');
   process.env.FAKE_CLAUDE_DIR = rec;
   process.env.FAKE_CLAUDE_QUEUE = queue;
   process.env.FAKE_CLAUDE_MODE = 'ok';

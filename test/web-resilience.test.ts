@@ -1,10 +1,9 @@
 // The web page survives a slow, restarting or updated server, and its own errors are reported, not lost.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { startHttp, tmpDataDir } from './helpers.ts';
+import { startHttp, tmpDataDir, scratchDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { webBuildId } from '../src/server/routes/static.ts';
@@ -39,13 +38,13 @@ test('a server that is not there at all (restarting) also marks the connection d
 });
 
 test('the server tells which web build it serves; the page knows its own', () => {
-  const dist = mkdtempSync(path.join(tmpdir(), 'dist-'));
+  const dist = scratchDir('dist-');
   mkdirSync(path.join(dist, 'assets'));
   writeFileSync(path.join(dist, 'index.html'), '<!doctype html><script type="module" crossorigin src="/assets/index-AbC123_x.js"></script>');
   assert.equal(webBuildId(dist), 'index-AbC123_x');
   assert.equal(buildFromScriptSrc('http://127.0.0.1:4123/assets/index-AbC123_x.js'), 'index-AbC123_x');
   assert.equal(buildFromScriptSrc('/src/main.tsx'), null); // the dev server: no build to compare
-  assert.equal(webBuildId(mkdtempSync(path.join(tmpdir(), 'nodist-'))), null);
+  assert.equal(webBuildId(scratchDir('nodist-')), null);
 });
 
 test('errors in the web page are reported to the server and listed on the status page', async () => {

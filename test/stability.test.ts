@@ -1,15 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { startHttp } from './helpers.ts';
+import { startHttp, scratchDir } from './helpers.ts';
 import { rotateLog } from '../src/util/log.ts';
 import { writeFileAtomic } from '../src/util/fs.ts';
 import { waitForNetwork } from '../src/util/network.ts';
 import { probeInstance } from '../src/server/instance.ts';
 
-const tmp = (p: string) => mkdtempSync(path.join(tmpdir(), p));
+const tmp = (p: string) => scratchDir(p);
 
 test('the log is rotated when it grows too big, keeping three old files', () => {
   const dir = tmp('log-');

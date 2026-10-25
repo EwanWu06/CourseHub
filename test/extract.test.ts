@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpDataDir } from './helpers.ts';
+import { tmpDataDir, scratchDir } from './helpers.ts';
 import { makeDocx, makePdf, makePptx } from '../mock/files.ts';
 import { startMockCanvas } from '../mock/server.ts';
 import { openDb } from '../src/db/index.ts';
@@ -17,7 +16,7 @@ import { extractFile, isExtractable, UnsupportedFileError } from '../src/content
 import { loadText } from '../src/content/textstore.ts';
 import { cleanTmp } from '../src/content/download.ts';
 
-const scratch = mkdtempSync(path.join(tmpdir(), 'coursehub-extract-'));
+const scratch = scratchDir('coursehub-extract-');
 function write(name: string, bytes: Buffer | string): string {
   const p = path.join(scratch, name);
   writeFileSync(p, bytes);

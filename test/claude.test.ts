@@ -1,9 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { tmpDataDir } from './helpers.ts';
+import { tmpDataDir, scratchDir } from './helpers.ts';
 import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { recentAiRuns } from '../src/db/runs.ts';
@@ -14,7 +13,7 @@ let rec: string;
 beforeEach(() => {
   tmpDataDir();
   db = openDb();
-  rec = mkdtempSync(path.join(tmpdir(), 'fake-claude-'));
+  rec = scratchDir('fake-claude-');
   process.env.COURSEHUB_CLAUDE_BIN = path.resolve('test/fixtures/fake-claude.sh');
   process.env.FAKE_CLAUDE_DIR = rec;
   process.env.FAKE_CLAUDE_MODE = 'ok';
