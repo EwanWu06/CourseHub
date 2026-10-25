@@ -103,7 +103,8 @@ export async function extractFile(filePath: string, name: string, contentType?: 
     return { kind, pages, scanned: false };
   }
   const { extractText, getDocumentProxy } = await import('unpdf'); // loaded on first PDF
-  const pdf = await getDocumentProxy(buf);
+  // errors only: pdf.js otherwise prints font-hinting chatter ("TT: undefined function: 32") that filled server.err.log
+  const pdf = await getDocumentProxy(buf, { verbosity: 0 });
   const { text } = await extractText(pdf, { mergePages: false });
   const pages = text.map((t) => t.replace(/[ \t]+\n/g, '\n').trim());
   const chars = pages.reduce((n, p) => n + p.replace(/\s/g, '').length, 0);
