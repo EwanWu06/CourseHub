@@ -7,10 +7,13 @@ import { tmpDataDir, scratchDir } from './helpers.ts';
 import { makeDocx, makePdf, makePptx } from '../mock/files.ts';
 import { startMockCanvas } from '../mock/server.ts';
 import { openDb } from '../src/db/index.ts';
-import { createSchool } from '../src/db/schools.ts';
+import { createSchool, getSchool } from '../src/db/schools.ts';
 import { getFile } from '../src/db/content.ts';
-import { saveAuth } from '../src/auth/store.ts';
+import { run } from '../src/db/sql.ts';
+import { makeClient, saveAuth } from '../src/auth/store.ts';
 import { syncSchool } from '../src/sync/index.ts';
+import { newStats } from '../src/sync/context.ts';
+import { extractPendingFiles } from '../src/content/pipeline.ts';
 import { paths } from '../src/config.ts';
 import { extractFile, isExtractable, UnsupportedFileError } from '../src/content/extract.ts';
 import { loadText } from '../src/content/textstore.ts';
@@ -118,6 +121,24 @@ test('locked files stay pending until the teacher opens them', async () => {
     mock.data.courses[0].files.find((x) => x.id === '7009')!.locked = false;
     await syncSchool(db, s, { reason: 'test', relogin: null });
     assert.equal(getFile(db, `${s}:f:7009`)!.text_status, 'ok');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a download the network cuts off stays queued for the next sync instead of failing for good', async () => {
+  // three LIFESCI Week 4 PDFs failed once (Oct 13) and were never read again: that week's guide went without its slides
+  const { db, mock, s } = await syncAlpha();
+  try {
+    run(db, "UPDATE files SET text_status = 'pending' WHERE id = $id", { id: `${s}:f:7001` });
+    const school = getSchool(db, s)!;
+    const fetchImpl: typeof fetch = (url, init) => (String(url).includes('/download') ? Promise.reject(new TypeError('fetch failed')) : fetch(url, init));
+    const client = makeClient(school, { fetchImpl, sleep: async () => {} })!;
+    await extractPendingFiles({ db, school, client, now: new Date(), firstSync: false, stats: newStats(), complete: new Set(), quizToAssignment: new Map(), topicToAssignment: new Map() });
+    assert.equal(getFile(db, `${s}:f:7001`)!.text_status, 'pending');
+    assert.equal(getFile(db, `${s}:f:7001`)!.text_error, null, 'not shown as "not open yet"');
+    await syncSchool(db, s, { reason: 'test', relogin: null });
+    assert.equal(getFile(db, `${s}:f:7001`)!.text_status, 'ok');
   } finally {
     await mock.close();
   }

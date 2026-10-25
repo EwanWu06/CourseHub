@@ -49,6 +49,20 @@ test('migrations are idempotent and record schema_version', () => {
   assert.ok(dir.length > 0);
 });
 
+test('migration 11 queues files whose text failed once for another try', () => {
+  tmpDataDir();
+  const db1 = openDb();
+  const { courseId } = seedCourse(db1);
+  upsertFile(db1, { id: 'alpha:f:1', course_id: courseId, canvas_id: '1', name: 'Week 4 Slides.pdf', content_type: 'application/pdf', size: 10, updated_at: '2026-10-08T18:45:57Z', html_url: 'x' });
+  setFileText(db1, 'alpha:f:1', { status: 'failed', error: '没有下载链接（文件可能被锁定）' });
+  db1.prepare("UPDATE meta SET value = '10' WHERE key = 'schema_version'").run(); // as the database was before
+  db1.close();
+  const db2 = openDb();
+  assert.equal(getFile(db2, 'alpha:f:1')!.text_status, 'pending');
+  assert.equal(getFile(db2, 'alpha:f:1')!.text_error, null);
+  assert.deepEqual(filesNeedingText(db2, 10).map((f) => f.id), ['alpha:f:1']);
+});
+
 test('normalizeBaseUrl keeps only the https origin', () => {
   assert.equal(normalizeBaseUrl('smc.instructure.com/'), 'https://smc.instructure.com');
   assert.equal(normalizeBaseUrl(' https://canvas.x.edu/courses/123 '), 'https://canvas.x.edu');

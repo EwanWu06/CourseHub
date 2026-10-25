@@ -1,5 +1,5 @@
 // After each sync: extract text from new/changed documents (a few per run), never keeping the file.
-import { SessionExpiredError } from '../canvas/client.ts';
+import { SessionExpiredError, isTransientError } from '../canvas/client.ts';
 import type { CanvasFile } from '../canvas/types.ts';
 import { filesNeedingText, setFileText } from '../db/content.ts';
 import { errorText } from '../sync/context.ts';
@@ -53,7 +53,11 @@ export async function extractPendingFiles(ctx: SyncContext, opts: { limit?: numb
       if (err instanceof SessionExpiredError) throw err;
       if (err instanceof UnsupportedFileError) setFileText(ctx.db, f.id, { status: 'unsupported' });
       else if (err instanceof FileTooLargeError) setFileText(ctx.db, f.id, { status: 'skipped', error: err.message });
-      else {
+      else if (isTransientError(err)) {
+        // the network or Canvas hiccuped, not the file: it stays queued for the next sync ('failed' is never retried)
+        log('warn', `extract ${f.id}: not reachable this time, will retry`, err);
+        if (ctx.client.offline) break;
+      } else {
         setFileText(ctx.db, f.id, { status: 'failed', error: errorText(err).slice(0, 300) });
         log('warn', `extract ${f.id} failed`, err);
       }

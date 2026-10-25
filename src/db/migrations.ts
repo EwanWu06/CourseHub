@@ -331,4 +331,9 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE module_items ADD COLUMN req_min_score REAL;
   ALTER TABLE module_items ADD COLUMN req_done INTEGER;
   `,
+  // 11: files whose text failed once are read again — 'failed' is never retried, and some failed only because they were
+  // locked (an older version) or the network was down, leaving a week's study guide without its slides
+  `
+  UPDATE files SET text_status = 'pending', text_error = NULL WHERE text_status = 'failed';
+  `,
 ];
