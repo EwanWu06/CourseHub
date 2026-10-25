@@ -58,7 +58,8 @@ export function statusIssues(x: IssueInput): Issue[] {
   if (x.diskFreeBytes != null && x.diskFreeBytes < LOW_DISK_BYTES) {
     out.push({ kind: 'disk', text: `这台 Mac 只剩 ${(x.diskFreeBytes / 1024 ** 3).toFixed(1)} GB 空间：太少会让同步、备份和课件读取失败，清理一下磁盘吧` });
   }
-  for (const s of x.schools) if (s.status === 'needs_login') out.push({ kind: 'login', text: `${s.name} 需要重新登录（自动续期没成功）`, action: 'login' });
+  // the school's own reason: a lapsed login whose renewal failed, an expired token, or no login on this Mac yet
+  for (const s of x.schools) if (s.status === 'needs_login') out.push({ kind: 'login', text: s.statusDetail ? `${s.name}：${s.statusDetail}` : `${s.name} 需要重新登录`, action: 'login' });
   for (const s of x.schools) {
     if (s.status === 'ok' && s.lastOkAt && hoursSince(s.lastOkAt) > 8) {
       out.push({ kind: 'stale', text: `${s.name} 已经 ${Math.floor(hoursSince(s.lastOkAt))} 小时没同步成功`, action: 'sync' });

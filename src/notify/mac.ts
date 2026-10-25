@@ -79,11 +79,14 @@ export function notify(n: Notice): Promise<void> {
   return chain;
 }
 
-export function loginNeededNotice(school: { name: string }): Notice {
+export function loginNeededNotice(school: { name: string; status_detail?: string | null }): Notice {
   return {
     kind: 'login',
     title: `需要重新登录：${school.name}`,
-    body: '自动续期没成功。打开 Course Hub 设置页点「重新登录」即可（期间截止日期由日历订阅兜底）。',
+    // the school's own reason when it has one (renewal failed, token expired, no login on this Mac yet)
+    body: school.status_detail
+      ? `${school.status_detail}（期间截止日期由日历订阅兜底）`
+      : '自动续期没成功。打开 Course Hub 设置页点「重新登录」即可（期间截止日期由日历订阅兜底）。',
     url: `http://127.0.0.1:${PORT}/settings`,
   };
 }

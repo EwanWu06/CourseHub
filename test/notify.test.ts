@@ -19,6 +19,10 @@ test('login-needed notice names the school and links to settings', () => {
   const n = loginNeededNotice({ name: 'LACCD' });
   assert.match(n.title, /LACCD/);
   assert.match(n.url!, /\/settings$/);
+  // moved to a new Mac without its logins: say that, not "the renewal failed"
+  const moved = loginNeededNotice({ name: 'SMC', status_detail: '这台电脑上还没有登录这所学校，请点「登录」' });
+  assert.match(moved.body, /^这台电脑上还没有登录这所学校/);
+  assert.doesNotMatch(moved.body, /自动续期/);
 });
 
 // ---- reminders and change alerts on a real database ----

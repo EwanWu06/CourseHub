@@ -22,6 +22,11 @@ test('status issues are spelled out in plain words, each with what to do', () =>
   assert.deepEqual(issues.map((i) => i.kind), ['login', 'stale', 'sync-error', 'job', 'backup', 'notifier', 'ai']);
   assert.match(issues[0].text, /LACCD.*重新登录/);
   assert.equal(issues[0].action, 'login');
+  const moved = statusIssues({
+    now, jobs: [], latestBackup: '2026-10-12', applet: true, lastAi: null,
+    schools: [{ name: 'SMC', status: 'needs_login', statusDetail: '这台电脑上还没有登录这所学校，请点「登录」', lastOkAt: hoursAgo(1) }],
+  });
+  assert.equal(moved[0].text, 'SMC：这台电脑上还没有登录这所学校，请点「登录」', 'the reason, not "the renewal failed"');
   assert.match(issues[1].text, /SMC.*10 小时/);
   assert.match(issues[3].text, /同步.*boom/);
 });
