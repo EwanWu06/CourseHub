@@ -3,7 +3,8 @@
 # login (restarted after a crash), puts `coursehub` on PATH and the Claude Code skill in place.
 #   ./scripts/install.sh [--no-open]
 set -e
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# the real folder, never a symlinked path to it (a link on the Desktop would put ~/Desktop into the LaunchAgent)
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 LABEL=local.coursehub.server
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 NODE="$(command -v node || true)"
