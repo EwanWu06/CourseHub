@@ -259,9 +259,11 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
     const engl: MockCourse = {
       id: '103', name: 'ENGL 1A - College Composition', course_code: 'ENGL 1A', start_at: weekStart(1), end_at: weeksAfter(1, 8), term: late,
       score: null, grade: null, tabs: ['home', 'announcements', 'assignments', 'modules', 'grades'], syllabus_body: null,
+      // due inside their modules' weeks whatever today's weekday (last Friday, this Sunday): relative-to-today dates
+      // put both a week late from Thursday on, and the week calibration rightly moved the course a week
       assignments: [
-        asg('7001', 'Essay 1 Draft', at(5), { points_possible: 50 }),
-        asg('7002', 'Narrative paragraph', at(-3), { submission: sub('submitted', { submitted_at: at(-4) }) }),
+        asg('7001', 'Essay 1 Draft', atLocal(addDays(monday, 6), 23, 59).toISOString(), { points_possible: 50 }),
+        asg('7002', 'Narrative paragraph', atLocal(addDays(monday, -3), 23, 59).toISOString(), { submission: sub('submitted', { submitted_at: atLocal(addDays(monday, -4), 20, 0).toISOString() }) }),
       ],
       quizzes: [],
       modules: [
