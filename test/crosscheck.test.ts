@@ -67,6 +67,23 @@ test('Canvas still expecting work that Course Hub shows as handed in is reported
   }
 });
 
+test('a peer-review grade column whose reviews are all done is not "still to hand in" just because Canvas\'s To Do lists it', async () => {
+  // SMC's "Research Paper Peer Reviews" (nothing to submit; 3 of 3 reviews done) stayed in Canvas's To Do until it
+  // was graded, and the status page called Course Hub wrong for most of a day
+  const { db, mock, s, sync } = await synced();
+  try {
+    mock.data.plannerExtras.push(
+      { type: 'assessment_request', id: '239993', course_id: '301', title: 'Essay #2: Rough Draft', todo_date: new Date(Date.now() + 2 * 86_400_000).toISOString(), assignment_id: '7101', workflow_state: 'completed' },
+    );
+    for (const x of mock.data.plannerExtras) if (x.id === '239991') x.workflow_state = 'completed';
+    await sync();
+    const todo = [{ type: 'submitting', course_id: '301', assignment: { id: '7107', name: 'Peer Reviews for Bradbury Draft' } }];
+    assert.deepEqual(crossCheck(db, getSchoolRow(db, s), new Date(), { todo }).problems, []);
+  } finally {
+    await mock.close();
+  }
+});
+
 test('problems that persist across two syncs show on the status page', async () => {
   const { db, mock, sync } = await synced();
   try {

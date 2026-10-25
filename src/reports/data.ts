@@ -57,6 +57,12 @@ export function effectiveDue(row: Pick<ItemRow, 'due_at' | 'syllabus_date' | 'lo
   return row.due_at ?? row.syllabus_date ?? (closesOnly(row) ? row.lock_at : null);
 }
 
+/** Nothing is handed in through Canvas: no submission, on paper, or not graded. */
+export function nothingToHandIn(row: Pick<ItemRow, 'submission_types'>): boolean {
+  const t = types(row as ItemRow);
+  return t.length > 0 && t.every((x) => NOT_SUBMITTABLE.has(x));
+}
+
 /** A "No Submission" column without a date (Achieve/iClicker grade sync, attendance): a grade, not a to-do. */
 export function isGradeColumn(row: Pick<ItemRow, 'submission_types' | 'due_at' | 'syllabus_date' | 'lock_at' | 'kind'>): boolean {
   if (effectiveDue(row)) return false;
@@ -85,9 +91,9 @@ export function taskStatus(row: ItemRow, now: Date, logic?: ItemLogic | null): T
   if (row.category === 'exam') return 'past'; // exams are sat, not submitted
   if (short) return 'overdue'; // replies / peer reviews still owed: Canvas usually still takes them
   // Past due and not done. Only call it overdue when Canvas would actually expect an online submission.
-  const t = types(row);
-  if (t.length > 0 && t.every((x) => NOT_SUBMITTABLE.has(x))) return 'past';
+  if (nothingToHandIn(row)) return 'past';
   if (row.kind === 'note' || row.kind === 'page') return 'past';
+  const t = types(row);
   if (row.sub_state === 'unknown') return 'past';
   if (row.provider !== 'canvas' && row.provider !== 'manual' && t.includes('external_tool')) return 'past'; // graded on the publisher's site
   return 'overdue';

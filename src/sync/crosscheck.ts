@@ -9,7 +9,7 @@ import type { DB } from '../db/index.ts';
 import { getItem } from '../db/items.ts';
 import { one } from '../db/sql.ts';
 import type { ItemRow, SchoolRow } from '../db/types.ts';
-import { effectiveDue, makeTaskViewer } from '../reports/data.ts';
+import { effectiveDue, makeTaskViewer, nothingToHandIn } from '../reports/data.ts';
 import { courseDisplayName } from '../util/course.ts';
 import { localDateStr, sameDeadline } from '../util/time.ts';
 
@@ -109,7 +109,8 @@ export function crossCheck(db: DB, school: SchoolRow, now: Date, ev: Evidence): 
     const name = t.assignment?.name ?? t.quiz?.title ?? '(无标题)';
     const row = live(id);
     if (!row) problems.push(`Canvas 的 To Do 里有「${name}」${where(t.course_id)}，Course Hub 里没有`);
-    else if (view(row).status === 'done' && !row.local_done && !row.canvas_done && !row.excused) problems.push(`Canvas 说「${name}」${where(t.course_id)}还没交，Course Hub 却显示已完成`);
+    // a column with nothing to hand in (a peer-review grade) stays in Canvas's To Do until it is graded: nothing to compare
+    else if (view(row).status === 'done' && !row.local_done && !row.canvas_done && !row.excused && !nothingToHandIn(row)) problems.push(`Canvas 说「${name}」${where(t.course_id)}还没交，Course Hub 却显示已完成`);
   }
 
   for (const a of ev.missing ?? []) {
