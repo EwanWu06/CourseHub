@@ -8,6 +8,8 @@ import { saveReport } from '../src/db/reports.ts';
 import { listBackups } from '../src/db/backup.ts';
 import { parseHHMM, lastSlotAtOrBefore, isSlotDue, isIntervalDue, createScheduler, defaultJobs } from '../src/scheduler.ts';
 import type { Job } from '../src/scheduler.ts';
+import { weeklyPeriod } from '../src/reports/data.ts';
+import { localDateStr } from '../src/util/time.ts';
 
 const at = (iso: string) => new Date(iso);
 
@@ -147,6 +149,39 @@ test('the schedule does not remake a report that already exists for its day or w
   const sunday = createScheduler(db, jobs, { clock: () => at('2026-10-19T03:30:00Z'), settings: () => DEFAULT_SETTINGS }); // Sun Oct 18, 20:30
   await sunday.tick();
   assert.deepEqual(calls, ['sync', 'daily', 'weekly'], 'Sunday evening makes next week\'s report');
+});
+
+test('a report made early by hand does not move the following ones to midnight', async () => {
+  // what happened: Monday's daily was made by hand in the evening, so the 07:00 run was skipped and the job's last
+  // run stayed on Sunday; from Tuesday on every daily came out at 00:01 and the Sunday weekly at 00:01, not 20:00
+  tmpDataDir();
+  const db = openDb();
+  saveReport(db, { type: 'daily', period: '2026-10-12', content: '{}' });
+  saveReport(db, { type: 'weekly', period: '2026-10-12', content: '{}' });
+  setJob(db, 'daily', { last_run_at: '2026-10-11T14:00:00.000Z', last_status: 'ok' }); // Sun Oct 11, 07:00
+  setJob(db, 'weekly', { last_run_at: '2026-10-05T03:00:00.000Z', last_status: 'ok' }); // Sun Oct 4, 20:00
+  const made: string[] = [];
+  const jobs = defaultJobs(db, {
+    runSync: async () => {},
+    onLoginNeeded: () => {},
+    generateDaily: async (now) => { made.push(`daily ${now.toISOString()}`); saveReport(db, { type: 'daily', period: localDateStr(now), content: '{}' }); },
+    generateWeekly: async (now) => { made.push(`weekly ${now.toISOString()}`); saveReport(db, { type: 'weekly', period: weeklyPeriod(now), content: '{}' }); },
+    flushChanges: async () => {},
+  }).filter((j) => j.name === 'daily' || j.name === 'weekly');
+  const tickAt = (iso: string) => createScheduler(db, jobs, { clock: () => at(iso), settings: () => DEFAULT_SETTINGS }).tick();
+  await tickAt('2026-10-13T03:00:00Z'); // Mon 20:00: both reports exist
+  await tickAt('2026-10-13T07:01:00Z'); // Tue 00:01
+  assert.deepEqual(made, [], 'nothing at midnight');
+  await tickAt('2026-10-13T14:00:00Z'); // Tue 07:00
+  await tickAt('2026-10-14T07:01:00Z'); // Wed 00:01
+  await tickAt('2026-10-14T14:00:00Z'); // Wed 07:00
+  await tickAt('2026-10-18T07:01:00Z'); // Sun Oct 18, 00:01 (the dailies of Thu–Sat were missed: asleep)
+  assert.deepEqual(made, ['daily 2026-10-13T14:00:00.000Z', 'daily 2026-10-14T14:00:00.000Z']);
+  await tickAt('2026-10-18T14:30:00Z'); // Sun 07:30, woke late: the daily catches up
+  await tickAt('2026-10-19T03:00:00Z'); // Sun 20:00: next week's report
+  assert.deepEqual(made.slice(2), ['daily 2026-10-18T14:30:00.000Z', 'weekly 2026-10-19T03:00:00.000Z']);
+  await tickAt('2026-10-19T16:00:00Z'); // Mon 09:00: Monday's daily catches up, the weekly isn't remade
+  assert.deepEqual(made.slice(4), ['daily 2026-10-19T16:00:00.000Z']);
 });
 
 test('a job that hangs is cut off at its time limit; the rest of the tick and later ticks still run', { timeout: 5000 }, async () => {

@@ -177,7 +177,12 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     {
       name: 'daily', // settings.dailyTime (07:00); after sleep it runs once on wake. Always syncs first.
       timeoutMs: 40 * 60_000,
-      isDue: (now, last, s) => isSlotDue(now, last, parseHHMM(s.dailyTime)) && !getReport(db, `daily:${localDateStr(now)}`),
+      isDue: (now, last, s) => {
+        const slot = parseHHMM(s.dailyTime);
+        // Only today's slot counts. A slot skipped because its report already existed leaves the job's last run
+        // behind it; without this the next day's report would be made at midnight (and every day after that).
+        return isSlotDue(now, last, slot) && localDateStr(lastSlotAtOrBefore(now, slot)) === localDateStr(now) && !getReport(db, `daily:${localDateStr(now)}`);
+      },
       run: async (now) => {
         await syncNow(now);
         setJob(db, 'sync', { last_run_at: now.toISOString(), last_status: 'ok', last_error: null }); // counts as the scheduled sync
@@ -187,7 +192,12 @@ export function defaultJobs(db: DB, deps: JobDeps): Job[] {
     {
       name: 'weekly', // settings.weeklyDay + weeklyTime (Sunday 20:00), caught up once after sleep
       timeoutMs: 20 * 60_000,
-      isDue: (now, last, s) => isSlotDue(now, last, { ...parseHHMM(s.weeklyTime), weekday: s.weeklyDay }) && !getReport(db, `weekly:${weeklyPeriod(now)}`),
+      isDue: (now, last, s) => {
+        const slot = { ...parseHHMM(s.weeklyTime), weekday: s.weeklyDay };
+        const period = weeklyPeriod(now);
+        // the due slot must belong to the week the report is about: on Sunday morning last Sunday's slot doesn't
+        return isSlotDue(now, last, slot) && weeklyPeriod(lastSlotAtOrBefore(now, slot)) === period && !getReport(db, `weekly:${period}`);
+      },
       run: async (now) => {
         await weekly(now);
       },
