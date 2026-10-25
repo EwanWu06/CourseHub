@@ -98,6 +98,8 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
   const monday = mondayOf(now);
   const weekStart = (weeksAgo: number) => atLocal(addDays(monday, -7 * weeksAgo), 0, 0).toISOString();
   const weeksAfter = (startWeeksAgo: number, weeks: number) => atLocal(addDays(monday, -7 * startWeeksAgo + 7 * weeks - 1), 23, 59).toISOString();
+  /** A fixed day of this Mon–Sun week (0 = Monday, -3 = last Friday, 6 = this Sunday), whatever today's weekday is. */
+  const weekday = (n: number, hh = 23, mm = 59) => atLocal(addDays(monday, n), hh, mm).toISOString();
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   /** "October 21st" for a day relative to today, the way syllabi write dates. */
   const spoken = (days: number) => {
@@ -154,19 +156,22 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
         { id: '94', name: 'Discussions', weight: 5 }, { id: '95', name: 'Knowledge Checks', weight: 30 }, { id: '96', name: 'Achieve', weight: 10 },
       ],
       assignments: [
-        asg('5001', 'Homework 5', at(-2), { group: '91', submission: sub('graded', { submitted_at: at(-3, 20, 0), score: 9, grade: '9' }) }),
+        // work in the "Week 5" and "Week 6" modules sits inside those weeks on any weekday (last Friday, last Wednesday, this
+        // Thursday and Sunday): the week calibration votes with these dates, and relative-to-today ones put most of them a
+        // week late on Sundays. Homework 6, Lab Report 3 and Reading Quiz 6 stay relative: tests need today / soon / tomorrow.
+        asg('5001', 'Homework 5', weekday(-3), { group: '91', submission: sub('graded', { submitted_at: weekday(-4, 20, 0), score: 9, grade: '9' }) }),
         asg('5002', 'Homework 6: Cell Respiration', at(0), { group: '91' }),
         asg('5003', 'Lab Report 3', inHours(2), { group: '93', points_possible: 20 }),
         asg('5004', 'Reading Quiz 6', at(1, 9, 0), { group: '92', submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '802', points_possible: 5 }),
-        asg('5005', 'Lab Report 2', at(-5), { group: '93', points_possible: 20, submission: sub('unsubmitted', { missing: true }) }),
+        asg('5005', 'Lab Report 2', weekday(-5), { group: '93', points_possible: 20, submission: sub('unsubmitted', { missing: true }) }),
         asg('5006', 'Discussion: Ethics of GMOs', at(3), { group: '94', submission_types: ['discussion_topic'], discussion_topic_id: '501' }),
-        asg('5007', 'Achieve: Chapter 6 Homework', at(4), { group: '96', submission_types: ['external_tool'], external_url: 'https://achieve.macmillanlearning.com/courses/abc/assignments/123' }),
+        asg('5007', 'Achieve: Chapter 6 Homework', weekday(6), { group: '96', submission_types: ['external_tool'], external_url: 'https://achieve.macmillanlearning.com/courses/abc/assignments/123' }),
         asg('5008', 'Lab safety signature', at(-3), { group: '93', submission_types: ['on_paper'], points_possible: 0 }),
         asg('5020', 'Lab Safety Discussion (Initial Post Due Thursday)', null, {
           group: '94', submission_types: ['discussion_topic'], submission: sub('pending_review', { submitted_at: at(-1, 10, 0) }),
           checkpoints: [
-            { tag: 'reply_to_topic', due_at: at(1), points_possible: 5, submitted_at: at(-1, 10, 0) },
-            { tag: 'reply_to_entry', due_at: at(4), points_possible: 5, submitted_at: null },
+            { tag: 'reply_to_topic', due_at: weekday(3), points_possible: 5, submitted_at: at(-1, 10, 0) },
+            { tag: 'reply_to_entry', due_at: weekday(6), points_possible: 5, submitted_at: null },
           ],
         }),
         asg('5009', 'Extra credit essay', null, { group: '91' }),
