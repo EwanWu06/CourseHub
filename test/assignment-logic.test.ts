@@ -195,6 +195,18 @@ test('the first-post task follows Canvas too when Canvas lists none of the entri
   }
 });
 
+test('a discussion nobody posted in that Canvas graded as missing: its first-post task is missing too, not done', async () => {
+  const { db, mock, s, sync } = await gamma();
+  try {
+    assignment(mock, '301', '7108').submission = { ...assignment(mock, '301', '7108').submission, workflow_state: 'graded', score: 0, grade: '0', missing: true };
+    await sync();
+    assert.equal(view(db, `${s}:a:7108`).status, 'missing');
+    assert.equal(view(db, `${s}:a:7108:initial_post`).status, 'missing');
+  } finally {
+    await mock.close();
+  }
+});
+
 test('one attempt, in the lab only, PDF only: shown with the task', async () => {
   const { db, mock, s, sync } = await gamma();
   try {

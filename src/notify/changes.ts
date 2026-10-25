@@ -36,6 +36,7 @@ export async function flushChangeNotices(db: DB, now: Date = new Date()): Promis
       data = {};
     }
     if (ch.kind === 'missing') {
+      if (ch.ref_id.endsWith(':initial_post')) continue; // goes missing with its discussion, which says so already
       const row = getItem(db, ch.ref_id);
       if (!row || row.removed) continue;
       const t = view(row);

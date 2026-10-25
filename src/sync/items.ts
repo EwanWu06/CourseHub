@@ -82,7 +82,8 @@ function initialPostRow(ctx: SyncContext, course: CourseRow, a: CanvasAssignment
   return {
     ...parent, id, title: `${a.name} · 首帖`, due_at: at, lock_at: null, points: null, description_html: null,
     module_id: kept.module_id ?? parent.module_id, canvas_done: getItem(ctx.db, parent.id)?.canvas_done ?? 0, // ticked off as a whole in the planner
-    sub_state: state, submitted_at: null, missing: 0, late: 0, score: null, grade: null,
+    // nothing posted and Canvas calls the discussion missing: so is its first post (a missing policy may have "graded" it)
+    sub_state: state, submitted_at: null, missing: posted === true ? 0 : parent.missing, late: 0, score: null, grade: null,
   };
 }
 

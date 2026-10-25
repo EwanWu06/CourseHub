@@ -200,6 +200,12 @@ test('change alerts: an earlier deadline, a new item due within 48 h and announc
   setLocalDone(db, 'lab19', true);
   addChange(db, { school_id: school.id, course_id: course, kind: 'missing', ref_id: 'lab19', summary: 'missing lab19', data: '{}' });
   assert.equal(await flushChangeNotices(db, now), 0);
+  // a discussion nobody posted in goes missing together with its first-post task: one alert, not two
+  add('disc9', { title: 'Week 9 Discussion', due_at: '2026-11-01T07:59:00Z', sub_state: 'graded', missing: 1 });
+  add('disc9:initial_post', { title: 'Week 9 Discussion · 首帖', due_at: '2026-10-30T06:59:00Z', sub_state: 'graded', missing: 1 });
+  for (const ref of ['disc9', 'disc9:initial_post']) addChange(db, { school_id: school.id, course_id: course, kind: 'missing', ref_id: ref, summary: `missing ${ref}`, data: '{}' });
+  assert.equal(await flushChangeNotices(db, now), 1);
+  assert.equal(seen.at(-1)!.body, 'BIO 3 Week 9 Discussion');
 
   change('announcement', 'ann1', {});
   updateSettings(db, { notifyChanges: false });
