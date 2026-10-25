@@ -286,7 +286,10 @@ export async function startMockCanvas(opts: MockOptions): Promise<MockCanvas> {
               const sid = cp.sub_id ?? `${a.id}${cp.tag === 'reply_to_topic' ? 1 : 2}`;
               out.push({ ...base, ignore: `${baseUrl}/api/v1/users/self/todo/sub_assignment_${sid}/submitting?permanent=0`, assignment: { id: sid, name: a.name, due_at: cp.due_at } });
             }
-          } else if (a.due_at && Date.parse(a.due_at) > Date.now() && a.submission.workflow_state === 'unsubmitted' && !a.submission_types.every((t) => ['none', 'on_paper', 'not_graded'].includes(t))) {
+          } else if (a.due_at && !a.submission.submitted_at && !a.submission_types.every((t) => ['none', 'on_paper', 'not_graded'].includes(t))
+            && ((Date.parse(a.due_at) > Date.now() && a.submission.workflow_state === 'unsubmitted')
+              // past due, never handed in, still open (even once a missing policy has graded it)
+              || (a.submission.missing && (!a.lock_at || Date.parse(a.lock_at) > Date.now())))) {
             out.push({ ...base, ignore: `${baseUrl}/api/v1/users/self/todo/assignment_${a.id}/submitting?permanent=0`, assignment: { id: a.id, name: a.name, due_at: a.due_at } });
           }
         }

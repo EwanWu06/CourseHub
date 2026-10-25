@@ -260,6 +260,18 @@ test('work in a module that is still locked says what unlocks it; the course lis
   }
 });
 
+test('work Canvas marked missing after grading it by itself is missing, not done', async () => {
+  const { db, mock, s, sync } = await gamma();
+  try {
+    await sync();
+    const lab = view(db, `${s}:a:7309`);
+    assert.equal(getItem(db, `${s}:a:7309`)!.sub_state, 'graded');
+    assert.equal(lab.status, 'missing');
+  } finally {
+    await mock.close();
+  }
+});
+
 test('the after-sync cross-check still agrees with Canvas', async () => {
   const { mock, sync } = await gamma();
   try {

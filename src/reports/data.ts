@@ -66,19 +66,19 @@ export function isGradeColumn(row: Pick<ItemRow, 'submission_types' | 'due_at' |
 
 /**
  * Done means everything the task asks for: Canvas says "submitted" after a discussion's first post, but while
- * counted steps (replies, peer reviews) are missing it stays open. Graded, excused or ticked off by the student
- * (here or in Canvas's planner) is done regardless.
+ * counted steps (replies, peer reviews) are missing it stays open. Excused or ticked off by the student (here or in
+ * Canvas's planner) is done regardless; graded is done unless Canvas calls it missing — a missing-submission policy
+ * grades work nobody handed in — or a module's minimum score isn't met.
  */
 export function taskStatus(row: ItemRow, now: Date, logic?: ItemLogic | null): TaskStatus {
   if (row.kind === 'event') return 'event';
   const unmet = unmetParts(logic);
   if (row.local_done || row.canvas_done || row.excused) return 'done';
-  // graded is done — unless Canvas's own module requirement (a minimum score) still isn't met
+  if (row.missing) return 'missing';
   if (row.sub_state === 'graded' && !unmet.some((p) => p.kind === 'score')) return 'done';
   const short = unmet.length > 0;
   const counted = (logic?.parts ?? []).some((p) => p.done !== null);
   if (!short && ((row.sub_state && DONE_STATES.has(row.sub_state)) || counted)) return 'done';
-  if (row.missing) return 'missing';
   const due = logic?.due?.at ?? effectiveDue(row);
   if (!due || Date.parse(due) > now.getTime()) return 'todo';
   if (closesOnly(row)) return 'past'; // it closed: nothing can be handed in any more

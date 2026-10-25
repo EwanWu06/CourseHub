@@ -44,6 +44,18 @@ test('taskStatus: things that cannot be submitted online become past, not overdu
   assert.equal(taskStatus(row({ provider: 'macmillan', submission_types: '["external_tool"]', due_at: past, missing: 1 }), NOW), 'missing');
 });
 
+test('taskStatus: Canvas calling it missing beats "graded" (a missing-submission policy grades work nobody handed in)', () => {
+  // LACCD Exp #18: graded by Canvas itself 4 minutes after the deadline, never submitted, missing
+  assert.equal(taskStatus(row({ sub_state: 'graded', submitted_at: null, missing: 1, due_at: past }), NOW), 'missing');
+  // a teacher's explicit "Missing" status on something handed in: Canvas says missing, so do we
+  assert.equal(taskStatus(row({ sub_state: 'submitted', submitted_at: past, missing: 1, due_at: past }), NOW), 'missing');
+  // excused by the teacher or ticked off by the student: done
+  assert.equal(taskStatus(row({ sub_state: 'graded', missing: 1, excused: 1, due_at: past }), NOW), 'done');
+  assert.equal(taskStatus(row({ sub_state: 'graded', missing: 1, local_done: 1, due_at: past }), NOW), 'done');
+  // graded with nothing handed in online and not missing (paper work the teacher graded): done
+  assert.equal(taskStatus(row({ sub_state: 'graded', submitted_at: null, missing: 0, due_at: past }), NOW), 'done');
+});
+
 test('taskStatus: calendar events are events', () => {
   assert.equal(taskStatus(row({ kind: 'event', sub_state: null, submission_types: null }), NOW), 'event');
 });

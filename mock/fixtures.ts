@@ -465,6 +465,11 @@ export function buildFixtures(variant: 'alpha' | 'beta' | 'gamma', now: Date = n
           description: '<p>Digital Lab Submission Reminders:</p><ul><li>You will have one attempt to complete this assignment.</li><li>Do not push the "submit" button until you have completed the assignment. There is no way to unsubmit assignments.</li><li>You may only complete the assignment if you are physically in the lab.</li></ul>',
         }),
         asg('7307', 'Lab report upload', at(4), { allowed_extensions: ['pdf'] }),
+        // like Exp #18: never handed in; Canvas's missing-submission policy graded it right after the lab, grade not posted
+        asg('7309', 'Exp #18: Potentiometric Analysis', at(-1, 16, 25), {
+          submission_types: ['online_quiz'], is_quiz_assignment: true, quiz_id: '7812', points_possible: 100, lock_at: at(60),
+          submission: sub('graded', { missing: true }),
+        }),
         // a PlayPosit lecture video that still carries a file-type setting: nothing is uploaded
         asg('7308', '19.6 Gibbs Free Energy', at(5), { submission_types: ['external_tool'], external_url: 'https://www.playposit.com/lti/1.3/launch', allowed_extensions: ['pdf'], points_possible: 2 }),
       ],

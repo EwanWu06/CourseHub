@@ -1,6 +1,6 @@
-// Alerts right after a sync: a deadline moved earlier, a new item due within 48 h, a new announcement. At most
-// three notices per flush, the rest summarised in one. Everything pending is marked notified (first-sync
-// changes are stored already notified, so they never alert).
+// Alerts right after a sync: Canvas marked something missing, a deadline moved earlier, a new item due within 48 h,
+// a new announcement. At most three notices per flush, the rest summarised in one. Everything pending is marked
+// notified (first-sync changes are stored already notified, so they never alert).
 import { PORT } from '../config.ts';
 import { markNotified, pendingChanges } from '../db/changes.ts';
 import { getTopic } from '../db/content.ts';
@@ -35,7 +35,15 @@ export async function flushChangeNotices(db: DB, now: Date = new Date()): Promis
     } catch {
       data = {};
     }
-    if (ch.kind === 'due_changed' || ch.kind === 'new_item') {
+    if (ch.kind === 'missing') {
+      const row = getItem(db, ch.ref_id);
+      if (!row || row.removed) continue;
+      const t = view(row);
+      if (t.status !== 'missing') continue; // excused, ticked off or handed in since
+      const label = `${course} ${t.title}`.trim();
+      const open = row.lock_at && Date.parse(row.lock_at) > now.getTime() ? ` · 还能交到 ${describeDue(row.lock_at, now)}` : '';
+      found.push({ rank: 0, label, notice: { kind: 'change', title: 'Canvas 标记缺交', body: `${label}${open}`, url: t.htmlUrl ?? HOME } });
+    } else if (ch.kind === 'due_changed' || ch.kind === 'new_item') {
       const row = getItem(db, ch.ref_id);
       if (!row || row.removed) continue;
       const t = view(row);

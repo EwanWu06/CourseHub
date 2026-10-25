@@ -189,6 +189,18 @@ test('change alerts: an earlier deadline, a new item due within 48 h and announc
   assert.equal(pendingChanges(db).length, 0, 'everything is marked notified');
   assert.equal(await flushChangeNotices(db, now), 0);
 
+  // Canvas marks something missing: said at once, with how long it can still be handed in
+  add('lab18', { title: 'Exp #18', due_at: '2026-11-01T00:25:00Z', lock_at: '2026-12-18T07:59:59Z', sub_state: 'graded', missing: 1 });
+  addChange(db, { school_id: school.id, course_id: course, kind: 'missing', ref_id: 'lab18', summary: 'missing lab18', data: '{}' });
+  assert.equal(await flushChangeNotices(db, now), 1);
+  assert.equal(seen.at(-1)!.title, 'Canvas 标记缺交');
+  assert.equal(seen.at(-1)!.body, 'BIO 3 Exp #18 · 还能交到 12月17日 周四 23:59');
+  // ticked off since: no alert
+  add('lab19', { title: 'Exp #19', due_at: '2026-11-01T00:25:00Z', sub_state: 'graded', missing: 1 });
+  setLocalDone(db, 'lab19', true);
+  addChange(db, { school_id: school.id, course_id: course, kind: 'missing', ref_id: 'lab19', summary: 'missing lab19', data: '{}' });
+  assert.equal(await flushChangeNotices(db, now), 0);
+
   change('announcement', 'ann1', {});
   updateSettings(db, { notifyChanges: false });
   assert.equal(await flushChangeNotices(db, now), 0);
