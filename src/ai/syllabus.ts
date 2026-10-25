@@ -22,6 +22,8 @@ export interface SyllabusItem { id: string; title: string; kind: string; group: 
 export interface SyllabusInput {
   courseId: string; courseName: string; term: string | null; start: string | null; end: string | null;
   sources: SyllabusSource[]; items: SyllabusItem[]; undatedModules: { id: string; name: string }[]; hash: string;
+  /** the source texts alone (the item list changes far more often than the syllabus itself) */
+  sourcesHash: string;
 }
 
 export interface SyllabusResult {
@@ -88,7 +90,7 @@ export function buildSyllabusInput(db: DB, courseId: string): SyllabusInput {
   }));
   return {
     courseId, courseName: `${courseDisplayName(course)} — ${course.name}`, term: course.term_name, start: course.start_at,
-    end: course.end_at, sources: kept, items, undatedModules, hash,
+    end: course.end_at, sources: kept, items, undatedModules, hash, sourcesHash: sha256(JSON.stringify(kept.map((s) => [s.id, s.text]))),
   };
 }
 
@@ -206,7 +208,19 @@ function buildPrompt(input: SyllabusInput): string {
   return lines.join('\n');
 }
 
-export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusInput, result: SyllabusResult): SyllabusSummary {
+/** Why each syllabus-only exam exists: the verified quote (normalized) and its date, kept per course. */
+type ExamEvidence = Record<string, { quote: string; date: string }>;
+const evidenceKey = (courseId: string) => `syllabus-exams:${courseId}`;
+
+function readEvidence(db: DB, courseId: string): ExamEvidence {
+  try {
+    return (JSON.parse(getKV(db, evidenceKey(courseId)) ?? '{}') as ExamEvidence) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusInput, result: SyllabusResult, opts: { keepTopics?: boolean } = {}): SyllabusSummary {
   const course = getCourse(db, courseId)!;
   const summary: SyllabusSummary = { examsApplied: 0, examsRejected: 0, categoriesApplied: 0, weeksApplied: 0, modulesApplied: 0 };
   const texts = new Map(input.sources.map((s) => [s.id, normalize(s.text)]));
@@ -214,9 +228,19 @@ export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusI
   const all_ = [...texts.values()].join('\n');
   const inCourse = (id: string | null) => {
     const it = id ? getItem(db, id) : undefined;
-    return it && it.course_id === courseId ? it : undefined;
+    return it && it.course_id === courseId && it.source !== 'syllabus' ? it : undefined;
   };
+  // A Canvas item with exactly the exam's name is that exam, whether or not this reading said so
+  const canvasItems = all<{ id: string; title: string }>(db, "SELECT id, title FROM items WHERE course_id = $courseId AND removed = 0 AND source != 'syllabus'", { courseId });
+  const sameTitle = (title: string) => {
+    const hits = canvasItems.filter((i) => normalize(i.title) === normalize(title));
+    return hits.length === 1 ? getItem(db, hits[0].id) : undefined;
+  };
+  const evidence = readEvidence(db, courseId);
+  const nextEvidence: ExamEvidence = {};
+  const covered = new Set<string>(); // synthetic ids and quotes a Canvas item now stands for
   const keptSynthetic = new Set<string>();
+  const examItems = new Set<string>(); // named as an exam (with a verified quote) by this reading
 
   for (const exam of result.exams ?? []) {
     const quote = normalize(exam.quote ?? '');
@@ -239,33 +263,54 @@ export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusI
     const time = date && exam.time && /^\d{2}:\d{2}$/.test(exam.time) && timeMentioned(context, exam.time) ? exam.time : null;
     const when = date ? atLocal(date, time ? Number(time.slice(0, 2)) : 23, time ? Number(time.slice(3)) : 59).toISOString() : null;
     const note = `日期来自大纲「${exam.quote.trim().slice(0, 90)}」${exam.coverage ? ` · 范围：${exam.coverage}` : ''}`;
-    const item = inCourse(exam.item_id);
+    const syntheticId = `${course.school_id}:x:${sha256(`${courseId}|${normalize(exam.title)}`).slice(0, 12)}`;
+    const item = inCourse(exam.item_id) ?? sameTitle(exam.title);
     if (item) {
+      covered.add(syntheticId).add(quote);
+      examItems.add(item.id);
       if (item.category_source !== 'user') setItemCategory(db, item.id, 'exam', 'syllabus');
       if (when && !item.due_at) setSyllabusDate(db, item.id, when, note, !!time);
       summary.examsApplied++;
     } else if (when) {
-      const id = `${course.school_id}:x:${sha256(`${courseId}|${normalize(exam.title)}`).slice(0, 12)}`;
+      // the same words and date read under another title are the same exam: keep its row
+      const id = Object.entries(evidence).find(([k, e]) => e.quote === quote && e.date === date && !keptSynthetic.has(k))?.[0] ?? syntheticId;
       upsertSyllabusExam(db, { id, school_id: course.school_id, course_id: courseId, title: exam.title.trim(), date: when, timeKnown: !!time, note, html_url: urls.get(exam.source_id) ?? null });
       keptSynthetic.add(id);
+      nextEvidence[id] = { quote, date: date! };
       summary.examsApplied++;
     }
   }
-  // Syllabus-only exams that the latest reading no longer finds go away.
-  for (const r of all<{ id: string }>(db, "SELECT id FROM items WHERE course_id = $courseId AND source = 'syllabus' AND removed = 0", { courseId })) {
-    if (!keptSynthetic.has(r.id)) run(db, 'UPDATE items SET removed = 1 WHERE id = $id', { id: r.id });
+  // A syllabus-only exam this reading didn't list stays while the sources still say so — the same words with its
+  // date nearby (one reading can simply overlook it). It goes when that text changed or a Canvas item stands for it.
+  const stillStated = (e: { quote: string; date: string }) => {
+    const pos = all_.indexOf(e.quote);
+    return pos >= 0 && dateMentioned(all_.slice(Math.max(0, pos - 300), pos + e.quote.length + 300), e.date);
+  };
+  for (const r of all<{ id: string; title: string }>(db, "SELECT id, title FROM items WHERE course_id = $courseId AND source = 'syllabus' AND removed = 0", { courseId })) {
+    if (keptSynthetic.has(r.id)) continue;
+    const e = evidence[r.id];
+    if (e && !covered.has(r.id) && !covered.has(e.quote) && !sameTitle(r.title) && stillStated(e)) {
+      nextEvidence[r.id] = e;
+      continue;
+    }
+    run(db, 'UPDATE items SET removed = 1 WHERE id = $id', { id: r.id });
   }
+  setKV(db, evidenceKey(courseId), JSON.stringify(nextEvidence));
 
   for (const c of result.categories ?? []) {
     const item = inCourse(c.item_id);
     if (!item || item.category_source === 'user' || !SYLLABUS_CATEGORIES.includes(c.category as Category)) continue;
+    if (examItems.has(item.id) && c.category !== 'exam') continue; // the same reading quoted it as an exam: that wins
     setItemCategory(db, item.id, c.category, 'syllabus');
     summary.categoriesApplied++;
   }
 
   const weeks = new Map(listWeeks(db, courseId).map((w) => [w.week, w]));
   for (const w of result.weeks ?? []) {
-    if (!weeks.has(w.week) || !Array.isArray(w.topics) || w.topics.length === 0) continue;
+    const row = weeks.get(w.week);
+    if (!row || !Array.isArray(w.topics) || w.topics.length === 0) continue;
+    // the same schedule read again keeps last time's topics: a new wording alone would remake that week's guide
+    if (opts.keepTopics && row.source === 'syllabus' && (JSON.parse(row.topics) as string[]).length > 0) continue;
     run(db, "UPDATE weeks SET topics = $topics, source = 'syllabus' WHERE course_id = $courseId AND week = $week", { topics: JSON.stringify(w.topics.slice(0, 8)), courseId, week: w.week });
     summary.weeksApplied++;
   }
@@ -278,7 +323,7 @@ export function applySyllabusAnalysis(db: DB, courseId: string, input: SyllabusI
   return summary;
 }
 
-export interface SyllabusState { hash: string; analyzedAt: string; summary: SyllabusSummary | null; error: string | null }
+export interface SyllabusState { hash: string; sourcesHash?: string; analyzedAt: string; summary: SyllabusSummary | null; error: string | null }
 
 export function syllabusState(db: DB, courseId: string): SyllabusState | null {
   const raw = getKV(db, `syllabus:${courseId}`);
@@ -292,11 +337,14 @@ export async function analyzeSyllabus(db: DB, courseId: string, opts: { force?: 
   if (input.sources.length === 0 && input.items.length === 0) return { ran: false };
   const res = await runClaude<SyllabusResult>(db, { purpose: 'syllabus', ref: courseId, system: SYSTEM, prompt: buildPrompt(input), schema: SCHEMA, timeoutMs: 6 * 60_000 });
   if (!res.ok || !res.data) {
-    setKV(db, `syllabus:${courseId}`, JSON.stringify({ hash: input.hash, analyzedAt: new Date().toISOString(), summary: prev?.summary ?? null, error: res.error ?? 'AI 失败' }));
+    setKV(db, `syllabus:${courseId}`, JSON.stringify({ hash: input.hash, sourcesHash: prev?.sourcesHash, analyzedAt: new Date().toISOString(), summary: prev?.summary ?? null, error: res.error ?? 'AI 失败' }));
     return { ran: true, ok: false, error: res.error };
   }
-  const summary = applySyllabusAnalysis(db, courseId, input, res.data);
-  setKV(db, `syllabus:${courseId}`, JSON.stringify({ hash: buildSyllabusInput(db, courseId).hash, analyzedAt: new Date().toISOString(), summary, error: null }));
+  // re-read only because the item list changed: the schedule is the same, so are its week topics (unless asked to redo)
+  const keepTopics = !opts.force && !!prev?.sourcesHash && prev.sourcesHash === input.sourcesHash;
+  const summary = applySyllabusAnalysis(db, courseId, input, res.data, { keepTopics });
+  const after = buildSyllabusInput(db, courseId);
+  setKV(db, `syllabus:${courseId}`, JSON.stringify({ hash: after.hash, sourcesHash: after.sourcesHash, analyzedAt: new Date().toISOString(), summary, error: null }));
   return { ran: true, ok: true, summary };
 }
 

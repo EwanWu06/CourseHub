@@ -8,7 +8,7 @@ import type { MockCanvas } from '../mock/server.ts';
 import { openDb } from '../src/db/index.ts';
 import type { DB } from '../src/db/index.ts';
 import { createSchool } from '../src/db/schools.ts';
-import { getItem, listItems, listUndated, setItemCategory } from '../src/db/items.ts';
+import { getItem, listItems, listUndated, setItemCategory, upsertItem } from '../src/db/items.ts';
 import { listModules } from '../src/db/content.ts';
 import { listWeeks } from '../src/db/study.ts';
 import { saveAuth } from '../src/auth/store.ts';
@@ -133,6 +133,90 @@ test('analyzeSyllabus calls Claude once per distinct input', async () => {
   assert.equal(readdirSync(rec).filter((f) => f.startsWith('argv-')).length, 1);
   const prompt = readdirSync(rec).find((f) => f.startsWith('stdin-'))!;
   assert.ok(prompt);
+});
+
+const NONE: SyllabusResult = { exams: [], categories: [], weeks: [], module_weeks: [] };
+const practical = (): SyllabusResult['exams'][number] => ({
+  title: 'Lab Practical', item_id: null, date: day(16), time: null, coverage: null, quote: 'Lab Practical (in person) on', source_id: 'page:alpha:p:62',
+});
+const syllabusOnly = () => listItems(db, { courseId: C }).filter((i) => i.source === 'syllabus').map((i) => i.title);
+
+test('a syllabus-only exam stays when one reading overlooks it, and goes once the text stops saying so', () => {
+  // CHEM 102's "Chapter 19 Reflection" (Week 8 page: "…will take place at the start of lab on November 3rd") was
+  // found by one reading, left out by the next and so removed from Course Hub
+  const input = buildSyllabusInput(db, C);
+  applySyllabusAnalysis(db, C, input, { ...NONE, exams: [practical()] });
+  assert.deepEqual(syllabusOnly(), ['Lab Practical']);
+  applySyllabusAnalysis(db, C, input, NONE);
+  assert.deepEqual(syllabusOnly(), ['Lab Practical'], 'still in the schedule, still shown');
+  applySyllabusAnalysis(db, C, input, { ...NONE, exams: [{ ...practical(), title: 'Lab practical exam' }] });
+  assert.deepEqual(syllabusOnly(), ['Lab practical exam'], 'the same words and date under another name: one exam, not two');
+  const edited = { ...input, sources: input.sources.map((s) => (s.id === 'page:alpha:p:62' ? { ...s, text: s.text.replace(/Lab Practical \(in person\) on [^.]*\./, '') } : s)) };
+  applySyllabusAnalysis(db, C, edited, NONE);
+  assert.deepEqual(syllabusOnly(), [], 'the teacher took it off the schedule');
+});
+
+test('a syllabus-only exam gives way to the Canvas item with its name, even when a reading doesn\'t connect the two', () => {
+  const input = buildSyllabusInput(db, C);
+  applySyllabusAnalysis(db, C, input, { ...NONE, exams: [practical()] });
+  upsertItem(db, {
+    id: 'alpha:a:5099', school_id: 'alpha', course_id: C, kind: 'assignment', title: 'Lab Practical', due_at: null, end_at: null, unlock_at: null,
+    lock_at: null, points: 50, html_url: null, provider: 'canvas', description_html: null, submission_types: '["on_paper"]', sub_state: 'unsubmitted',
+    submitted_at: null, missing: 0, late: 0, excused: 0, score: null, grade: null, canvas_done: 0, source: 'api', module_id: null, group_id: null,
+  });
+  try {
+    applySyllabusAnalysis(db, C, input, { ...NONE, exams: [practical()] }); // item_id null again
+    assert.deepEqual(syllabusOnly(), [], 'no second "Lab Practical"');
+    const item = getItem(db, 'alpha:a:5099')!;
+    assert.equal(item.category, 'exam');
+    assert.equal(item.syllabus_date, atLocal(day(16), 23, 59).toISOString());
+    applySyllabusAnalysis(db, C, input, NONE);
+    assert.deepEqual(syllabusOnly(), []);
+  } finally {
+    db.prepare("UPDATE items SET removed = 1 WHERE id = 'alpha:a:5099'").run();
+  }
+});
+
+test('an item a reading quotes as an exam stays an exam when the same reading\'s category list says otherwise', () => {
+  // CHEM 102's Reflections (listed under "Upcoming Exams") were dated as exams and then filed as quizzes by one reply
+  const input = buildSyllabusInput(db, C);
+  applySyllabusAnalysis(db, C, input, {
+    ...NONE,
+    exams: [{ title: 'Knowledge Check 2', item_id: 'alpha:a:5012', date: day(9), time: null, coverage: null, quote: 'Knowledge Check 2, covering Chapters 5–6, will take place during lab', source_id: 'page:alpha:p:62' }],
+    categories: [{ item_id: 'alpha:a:5012', category: 'quiz', reason: 'a quiz in lab' }],
+  });
+  assert.equal(getItem(db, 'alpha:a:5012')!.category, 'exam');
+});
+
+test('reading the same schedule again keeps its week topics (a new wording would remake that week\'s study guide)', () => {
+  const input = buildSyllabusInput(db, C);
+  const topics = (t: string[]): SyllabusResult => ({ ...NONE, weeks: [{ week: 6, topics: t }] });
+  const week6 = () => JSON.parse(listWeeks(db, C).find((w) => w.week === 6)!.topics) as string[];
+  applySyllabusAnalysis(db, C, input, topics(['Cellular respiration']));
+  applySyllabusAnalysis(db, C, input, topics(['Cellular Respiration', 'Glycolysis']), { keepTopics: true });
+  assert.deepEqual(week6(), ['Cellular respiration']);
+  applySyllabusAnalysis(db, C, input, topics(['Cellular Respiration', 'Glycolysis']));
+  assert.deepEqual(week6(), ['Cellular Respiration', 'Glycolysis'], 'a changed schedule is read afresh');
+});
+
+test('analyzeSyllabus re-reads when only the work list changed, and keeps the week topics it already has', async () => {
+  const rec = scratchDir('fake-claude-');
+  const queue = scratchDir('fake-claude-q-');
+  process.env.COURSEHUB_CLAUDE_BIN = path.resolve('test/fixtures/fake-claude.sh');
+  process.env.FAKE_CLAUDE_DIR = rec;
+  process.env.FAKE_CLAUDE_QUEUE = queue;
+  const reply = (topics: string[], n: number) => {
+    const data = { ...NONE, weeks: [{ week: 7, topics }] };
+    writeFileSync(path.join(queue, `${n}.json`), JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(data), structured_output: data, usage: { input_tokens: 10, output_tokens: 5 } }));
+  };
+  const week7 = () => JSON.parse(listWeeks(db, C).find((w) => w.week === 7)!.topics) as string[];
+  reply(['Photosynthesis: light reactions'], 1);
+  reply(['Light reactions', 'Calvin cycle'], 2);
+  assert.equal((await analyzeSyllabus(db, C, { force: true })).ran, true);
+  assert.deepEqual(week7(), ['Photosynthesis: light reactions']);
+  db.prepare("UPDATE items SET title = 'Homework 5 (updated)' WHERE id = 'alpha:a:5001'").run(); // the work list changed, the syllabus didn't
+  assert.equal((await analyzeSyllabus(db, C)).ran, true);
+  assert.deepEqual(week7(), ['Photosynthesis: light reactions']);
 });
 
 test('timeMentioned reads times the way syllabi write them, ranges included', () => {
