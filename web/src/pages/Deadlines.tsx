@@ -1,0 +1,141 @@
+import { Fragment, useMemo, useState } from 'react';
+import { useApi } from '../api.ts';
+import { useLocation } from '../router.tsx';
+import { AddTask } from '../components/AddTask.tsx';
+import { MonthCalendar } from '../components/MonthCalendar.tsx';
+import { TaskList } from '../components/TaskRow.tsx';
+import { Empty, ErrorNote, Masthead, Section, Loading } from '../components/ui.tsx';
+import { fmtDate, weekdayName } from '../format.ts';
+import { zhMonth } from '../lib/almanac.ts';
+import { dateKey, groupByDay } from '../lib/tasks.ts';
+import type { CourseCard, SchoolView, TaskView } from '../types.ts';
+
+const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const KINDS: { id: string; label: string; match: (t: TaskView) => boolean }[] = [
+  { id: 'all', label: '全部类别', match: () => true },
+  { id: 'exam', label: '考试', match: (t) => t.category === 'exam' },
+  { id: 'homework', label: '作业', match: (t) => t.category === 'homework' },
+  { id: 'quiz', label: '测验', match: (t) => t.category === 'quiz' },
+  { id: 'lab', label: '实验', match: (t) => t.category === 'lab' },
+  { id: 'project', label: '项目 / 论文', match: (t) => t.category === 'project' },
+  { id: 'discussion', label: '讨论', match: (t) => t.category === 'discussion' },
+  { id: 'reading', label: '讲课视频 / 阅读', match: (t) => t.category === 'reading' },
+  { id: 'event', label: '日程', match: (t) => t.kind === 'event' && t.category !== 'exam' },
+  { id: 'manual', label: '手动添加', match: (t) => t.kind === 'manual' },
+];
+
+const DAY = 86_400_000;
+
+export function Deadlines() {
+  const now = new Date();
+  const range = useMemo(() => {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 21);
+    return { from: start.toISOString(), to: new Date(start.getTime() + 160 * DAY).toISOString() };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const items = useApi<TaskView[]>(`/api/items?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&includeDone=1`);
+  const undated = useApi<TaskView[]>('/api/items/undated');
+  const courses = useApi<CourseCard[]>('/api/courses');
+  const schools = useApi<SchoolView[]>('/api/schools');
+  const { query } = useLocation();
+  const [view, setView] = useState<'list' | 'month'>(query.get('view') === 'month' ? 'month' : 'list');
+  const [school, setSchool] = useState('');
+  const [course, setCourse] = useState('');
+  const [kind, setKind] = useState(() => (KINDS.some((k) => k.id === query.get('kind')) ? query.get('kind')! : 'all')); // /deadlines?kind=exam
+  const [showDone, setShowDone] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [selected, setSelected] = useState<string | null>(dateKey(now));
+
+  const matcher = KINDS.find((k) => k.id === kind)!.match;
+  const filter = (t: TaskView) => (!school || t.schoolId === school) && (!course || t.courseId === course) && matcher(t);
+  const all = (items.data ?? []).filter(filter);
+  const todayKey = dateKey(now);
+  const visible = all.filter((t) => {
+    if (showDone) return true;
+    if (t.status === 'done') return false;
+    const past = dateKey(new Date(t.dueAt!)) < todayKey;
+    return !past || t.status === 'overdue' || t.status === 'missing';
+  });
+  const groups = groupByDay(visible, now);
+  const selectedTasks = selected ? all.filter((t) => t.dueAt && dateKey(new Date(t.dueAt)) === selected) : [];
+  const courseOptions = (courses.data ?? []).filter((c) => !school || c.course.school_id === school);
+  const undatedList = (undated.data ?? []).filter(filter);
+
+  return (
+    <div className="page">
+      <Masthead kicker="Deadlines" title="截止日期" aside={<button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ 手动添加任务</button>} />
+      <div className="toolbar">
+        <div className="seg" role="group" aria-label="视图">
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>列表</button>
+          <button type="button" aria-pressed={view === 'month'} onClick={() => setView('month')}>月历</button>
+        </div>
+        <select className="select" value={school} onChange={(e) => { setSchool(e.target.value); setCourse(''); }} aria-label="学校">
+          <option value="">全部学校</option>
+          {(schools.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <select className="select" value={course} onChange={(e) => setCourse(e.target.value)} aria-label="课程">
+          <option value="">全部课程</option>
+          {courseOptions.map((c) => <option key={c.course.id} value={c.course.id}>{c.course.display_name}</option>)}
+        </select>
+        <select className="select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="类型">
+          {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+        </select>
+        <label className="row small"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> 显示已完成 / 已过</label>
+      </div>
+      <ErrorNote error={items.error} />
+      {!items.data ? <Loading /> : view === 'list' ? (
+        groups.length === 0 ? <Empty glyph="闲">这段时间没有符合条件的截止日期。</Empty> : (
+          <div className="day-groups">
+            {groups.map((g, i) => {
+              const d = new Date(`${g.key}T12:00:00`);
+              // an almanac turns the page at each new month (the current month needs no heading)
+              const month = g.key.slice(0, 7);
+              const newMonth = i === 0 ? month !== todayKey.slice(0, 7) : month !== groups[i - 1].key.slice(0, 7);
+              return (
+                <Fragment key={g.key}>
+                  {newMonth ? (
+                    <div className="month-rule">
+                      <span>{d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()} 年 ` : ''}{zhMonth(d.getMonth() + 1)}</span>
+                      <span className="month-en">{MONTH_EN[d.getMonth()]}</span>
+                    </div>
+                  ) : null}
+                  <section className={`day ${g.key < todayKey ? 'past' : ''} ${g.key === todayKey ? 'is-today' : ''}`} aria-label={g.rel ? `${g.rel} ${g.date}` : g.date}>
+                    <div className="day-head">
+                      <span className="day-n">{d.getDate()}</span>
+                      <span className="day-w">{weekdayName(d)}{g.rel ? <b className="day-rel">{g.rel}</b> : null}</span>
+                      <span className={`n ${g.tasks.length === 1 ? 'is-one' : ''}`}>{g.tasks.length} 项</span>
+                    </div>
+                    <TaskList tasks={g.tasks} now={now} showDate={false} exitOnDone={!showDone} />
+                  </section>
+                </Fragment>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        <>
+          <div className="cal-nav">
+            <button type="button" className="btn btn-sm" onClick={() => setCursor(({ y, m }) => (m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 }))}>‹ 上个月</button>
+            <h2 className="cal-title">{cursor.y} 年 {cursor.m + 1} 月</h2>
+            <button type="button" className="btn btn-sm" onClick={() => setCursor(({ y, m }) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }))}>下个月 ›</button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setCursor({ y: now.getFullYear(), m: now.getMonth() }); setSelected(todayKey); }}>回到今天</button>
+          </div>
+          <MonthCalendar year={cursor.y} month={cursor.m} tasks={showDone ? all : all.filter((t) => t.status !== 'done')} selected={selected} onSelect={setSelected} />
+          {selected ? (
+            <Section title={fmtDate(new Date(`${selected}T12:00:00`), now)} note={`${selectedTasks.length} 项`}>
+              <TaskList tasks={selectedTasks} now={now} showDate={false} empty="这一天没有截止的作业。" />
+            </Section>
+          ) : null}
+        </>
+      )}
+      {undatedList.length ? (
+        <Section title="无截止日期" note="老师没设截止时间，但需要完成">
+          <TaskList tasks={undatedList} now={now} exitOnDone={!showDone} />
+        </Section>
+      ) : null}
+      <AddTask open={adding} onClose={() => setAdding(false)} courses={courses.data ?? []} />
+    </div>
+  );
+}
