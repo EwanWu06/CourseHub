@@ -1,0 +1,174 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { statSync } from 'node:fs';
+import path from 'node:path';
+import { tmpDataDir } from '../helpers.ts';
+import { startMockCanvas } from '../../mock/server.ts';
+import { openDb } from '../../src/db/index.ts';
+import { createSchool, getSchool } from '../../src/db/schools.ts';
+import { paths } from '../../src/config.ts';
+import { loadAuth, saveAuth } from '../../src/auth/store.ts';
+import { interactiveLogin, silentRelogin, getLoginState, cancelLogin, refreshSso, pickSchoolAccount } from '../../src/auth/login.ts';
+import { chromium } from 'playwright-core';
+import { chromeBin } from '../../src/config.ts';
+import { withChromeLock } from '../../src/auth/chrome.ts';
+import { syncSchool } from '../../src/sync/index.ts';
+import type { Page } from 'playwright-core';
+
+async function fillLogin(page: Page) {
+  await page.waitForSelector('#username', { timeout: 15_000 });
+  await page.fill('#username', 'student');
+  await page.fill('#password', 'password');
+  await page.check('#remember');
+  await page.click('#submit');
+}
+
+test('SSO login in Chrome saves a private session that the sync can use; silent re-login works with remember-me', { timeout: 120_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha', idp: true });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    const res = await interactiveLogin(db, school.id, { headless: true, onPage: fillLogin, timeoutMs: 60_000 });
+    assert.equal(res.ok, true, res.message);
+    assert.equal(getLoginState(school.id).status, 'success');
+
+    const authFile = path.join(paths().auth, `${school.id}.json`);
+    assert.equal(statSync(authFile).mode & 0o777, 0o600);
+    const auth = loadAuth(school.id)!;
+    assert.ok(auth.cookies.some((c) => c.name === 'canvas_session'));
+    assert.ok(auth.cookies.some((c) => c.name === 'idp_remember'), 'identity-provider cookies are kept for silent re-login');
+    assert.deepEqual([...auth.loginHosts!].sort(), [new URL(mock.baseUrl).hostname, new URL(mock.idpUrl).hostname].sort(), 'learns which sites the sign-in goes through');
+    assert.doesNotMatch(auth.userAgent, /Headless/);
+    const after = getSchool(db, school.id)!;
+    assert.equal(after.status, 'ok');
+    assert.equal(after.ics_url, `${mock.baseUrl}/feeds/calendars/user_alpha-ics-token.ics`);
+
+    assert.equal((await syncSchool(db, school.id, { reason: 'test', relogin: null })).mode, 'api');
+
+    mock.expireSessions();
+    assert.equal(await silentRelogin(db, school.id), true);
+    assert.equal((await syncSchool(db, school.id, { reason: 'test', relogin: null })).mode, 'api');
+
+    // a session for an unrelated site (the shared login browser picks them up) is not kept at the next renewal
+    const saved = loadAuth(school.id)!;
+    saveAuth({ ...saved, cookies: [...saved.cookies, { name: 'yt', value: 'v', domain: '.example.org', path: '/', expires: -1, httpOnly: true, secure: false }] });
+    mock.expireSessions();
+    assert.equal(await silentRelogin(db, school.id), true);
+    assert.ok(!loadAuth(school.id)!.cookies.some((c) => c.domain === '.example.org'));
+    assert.ok(loadAuth(school.id)!.cookies.some((c) => c.name === 'idp_remember'), 'the sign-in cookies stay');
+
+    mock.expireSessions();
+    mock.setRemember(false);
+    const started = Date.now();
+    assert.equal(await silentRelogin(db, school.id, { timeoutMs: 40_000 }), false);
+    assert.ok(Date.now() - started < 30_000, 'gives up early once a password form is showing');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('withChromeLock runs one Chrome job at a time', async () => {
+  const order: string[] = [];
+  const job = (name: string) => withChromeLock(async () => {
+    order.push(`${name}:start`);
+    await new Promise((r) => setTimeout(r, 30));
+    order.push(`${name}:end`);
+  });
+  await Promise.all([job('a'), job('b')]);
+  assert.deepEqual(order, ['a:start', 'a:end', 'b:start', 'b:end']);
+});
+
+test('closing every login window ends the attempt right away (Chrome may keep running on macOS)', { timeout: 60_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha' });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    const started = Date.now();
+    const res = await interactiveLogin(db, school.id, {
+      headless: true, timeoutMs: 50_000,
+      onPage: async (page) => { await page.waitForSelector('#username'); await page.close(); },
+    });
+    assert.equal(res.ok, false);
+    assert.match(res.message, /关闭/);
+    assert.ok(Date.now() - started < 15_000, 'did not wait for the timeout');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('starting a new login cancels the one still waiting', { timeout: 90_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha' });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    const first = interactiveLogin(db, school.id, { headless: true, timeoutMs: 60_000 });
+    await new Promise((r) => setTimeout(r, 3000));
+    cancelLogin(school.id);
+    const firstRes = await first;
+    assert.equal(firstRes.ok, false);
+    assert.match(firstRes.message, /取消/);
+    const second = await interactiveLogin(db, school.id, {
+      headless: true, timeoutMs: 40_000,
+      onPage: async (page) => {
+        await page.waitForSelector('#username');
+        await page.fill('#username', 'student');
+        await page.fill('#password', 'password');
+        await page.click('#submit');
+      },
+    });
+    assert.equal(second.ok, true, second.message);
+    assert.equal(getLoginState(school.id).status, 'success');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('daily SSO refresh renews through the identity provider and never harms a working login', { timeout: 150_000 }, async () => {
+  tmpDataDir();
+  const db = openDb();
+  const mock = await startMockCanvas({ variant: 'alpha', idp: true });
+  try {
+    const school = createSchool(db, { name: 'Alpha', base_url: mock.baseUrl });
+    assert.equal((await interactiveLogin(db, school.id, { headless: true, onPage: fillLogin, timeoutMs: 60_000 })).ok, true);
+    const session = () => loadAuth(school.id)!.cookies.find((c) => c.name === 'canvas_session')!.value;
+    const before = session();
+    assert.equal(await refreshSso(db, school.id), true);
+    const renewed = session();
+    assert.notEqual(renewed, before, 'went through SSO and got a fresh Canvas session');
+    assert.equal(getSchool(db, school.id)!.renewals, 1);
+
+    mock.setRemember(false);
+    assert.equal(await refreshSso(db, school.id, { timeoutMs: 30_000 }), false);
+    assert.equal(session(), renewed, 'a failed refresh keeps the working session');
+    assert.equal((await syncSchool(db, school.id, { reason: 'test', relogin: null })).mode, 'api');
+  } finally {
+    await mock.close();
+  }
+});
+
+test("a silent renewal picks the school's account on Microsoft's \"Pick an account\" page", { timeout: 60_000 }, async () => {
+  const browser = await chromium.launch({ executablePath: chromeBin(), headless: true });
+  try {
+    const page = await browser.newPage();
+    // the shape of login.microsoftonline.com's account picker: one role=button tile per account, its address in data-test-id
+    const picker = `<h1>Pick an account</h1>
+      <div role="button" data-test-id="jdoe7@student.alpha.example" onclick="window.picked=this.dataset.testId">Jamie Doe jdoe7@student.alpha.example Signed in</div>
+      <div role="button" data-test-id="jdoe7@student.alpha.example-menu-dots" onclick="window.picked='menu'">⋮</div>
+      <div role="button" data-test-id="jdoe01@student.beta.example" onclick="window.picked=this.dataset.testId">JAMIE DOE jdoe01@student.beta.example Signed in</div>
+      <div role="button" onclick="window.picked='other'">Use another account</div>`;
+    await page.setContent(picker);
+    assert.equal(await pickSchoolAccount(page, 'ilearn.alpha.example'), 'jdoe7@student.alpha.example');
+    assert.equal(await page.evaluate(() => (window as unknown as { picked?: string }).picked), 'jdoe7@student.alpha.example');
+    await page.goto('about:blank'); // a fresh window, so the click above doesn't count
+    await page.setContent(picker);
+    assert.equal(await pickSchoolAccount(page, 'my.gamma.example'), null, 'no account is clearly this school\'s: nothing clicked');
+    assert.equal(await page.evaluate(() => (window as unknown as { picked?: string }).picked), undefined);
+    await page.setContent('<form><input type="password"></form>');
+    assert.equal(await pickSchoolAccount(page, 'ilearn.alpha.example'), null, 'not a picker');
+  } finally {
+    await browser.close();
+  }
+});
