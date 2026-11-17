@@ -1,0 +1,98 @@
+import type { ReactNode } from 'react';
+import { Masthead } from '../components/ui.tsx';
+import { Link } from '../router.tsx';
+
+function Q({ q, children }: { q: string; children: ReactNode }) {
+  return (
+    <details className="card faq">
+      <summary>{q}</summary>
+      <div className="faq-a">{children}</div>
+    </details>
+  );
+}
+
+function Term({ k, children }: { k: ReactNode; children: ReactNode }) {
+  return <div className="term-row"><span className="term-k">{k}</span><span className="grow">{children}</span></div>;
+}
+
+export function Help() {
+  return (
+    <div className="page help is-numbered">
+      <Masthead kicker="Help" title="帮助" />
+
+      <section className="section">
+        <div className="section-head"><h2>每天怎么用</h2></div>
+        <ol className="steps">
+          <li><b>早上看「<Link to="/">今天</Link>」或 7:00 的日报</b>：最上面是 30 天内的考试倒计时；下面是 7 天内要交的作业，按天排（同一批讲课视频合成一行，点开看每一个）；右边是 AI 帮你排好的上午/下午/晚上。</li>
+          <li><b>做完一项就点左边的圆圈</b>：只在本机记「已完成」，不会改 Canvas。Canvas 上交了的会自动显示已完成。</li>
+          <li><b>学新内容去「<Link to="/study">学习</Link>」</b>：每门课每周一份中文讲解，有核心概念、例子、易错点和自测题，出处标到课件第几页。</li>
+          <li><b>周日晚上看周报</b>：下周每天要交什么、哪天最忙、有什么考试。</li>
+          <li>找东西按 <kbd>⌘</kbd> <kbd>K</kbd> 搜索，作业、课程、文件、公告都能搜。</li>
+        </ol>
+      </section>
+
+      <section className="section">
+        <div className="section-head"><h2>标签和状态是什么意思</h2></div>
+        <div className="card card-pad terms">
+          <Term k={<span className="seal seal-sm">考</span>}>考试或测验（看的是真实分类，不只是 Canvas 里的类型；比如化学的 Knowledge Check 是考试，章节 Homework 是作业）。分类不对可以点标签改。</Term>
+          <Term k={<span className="seal seal-sm">急</span>}>24 小时内要交、还没交的。</Term>
+          <Term k={<span className="seal seal-sm">逾</span>}>过了截止时间、Canvas 上还没交。</Term>
+          <Term k={<span className="seal seal-sm">缺</span>}>老师在 Canvas 里标了 missing。</Term>
+          <Term k={<span className="stamp">完</span>}>已完成：Canvas 上交了，或者你点了左边的圆圈（只记在本机）。</Term>
+          <Term k={<span className="from-syllabus">大纲</span>}>这个日期是从课程大纲（syllabus）里读出来的，Canvas 上没写；任务下面会附上大纲原文，方便核对。</Term>
+          <Term k={<span className="small muted">已过</span>}>已经过去、不需要在网上提交的（比如纸质作业、课堂考试）。</Term>
+          <Term k={<span className="small provider">外部工具 · 以平台为准</span>}>在 Macmillan Learning 等外部平台完成的作业，完成情况以那个平台为准。</Term>
+          <Term k={<span className="small provider">Achieve</span>}>直接从 Macmillan Achieve 读来的作业（Canvas 里只有「Achieve Category」成绩栏，具体作业和截止时间都在 Achieve）：截止时间和完成情况就是 Achieve 自己的。点开会经 Canvas 进入 Achieve。</Term>
+          <Term k={<span className="from-syllabus">开放到</span>}>Canvas 上没写截止日期，只写了「开放到」：过了这个时间就交不了，所以按它算截止。</Term>
+          <Term k={<span className="small">同伴互评</span>}>Canvas 分给你的同伴互评（peer review），评完 Canvas 会自动算完成。</Term>
+          <Term k={<span className="small">日程</span>}>Canvas 日历里的活动，不用交东西。</Term>
+          <Term k={<><span className="req is-met">首帖 ✓</span> <span className="req is-short">回复 1/2</span></>}>拿满分要做的几步，和你做到哪了。讨论帖在 Canvas 里发了第一帖就算「已交」，但老师要求的回复没回够，这里就还算没完成、照样提醒。回复按不同的同学算（同一个人只算一次，回复老师不算）。鼠标停在上面能看到作业说明里的原句。</Term>
+          <Term k={<span className="req is-short">互评 0/3</span>}>老师单独设了互评成绩栏时，数你评完了几份；分给你的互评按那一栏的截止时间算。</Term>
+          <Term k={<span className="req is-short">分数 10/12</span>}>模块要求的最低分：分数不够，Canvas 不算你完成这个模块，后面的模块可能打不开，所以就算已出分也还算没完成。</Term>
+          <Term k={<span className="req-note">只有一次机会 · 只能在实验室完成</span>}>作业说明或 Canvas 设置里的规矩（只能交一次、限时、只收 PDF、字数要求等），带下划线的停上去能看原文。</Term>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head"><h2>登录是怎么保持的</h2></div>
+        <div className="card card-pad prose">
+          <p>你在 Chrome 里正常登录一次学校，Course Hub 就记住这次登录（只存在这台 Mac 上），之后：</p>
+          <ul>
+            <li>每 30 分钟悄悄确认一次登录还有效；快过期时会在后台自动续上（用你学校的「记住我」），每天中午再刷新一次。</li>
+            <li>只有自动续不上时才会通知你，去 <Link to="/settings">设置</Link> 点「重新登录」就行。期间截止日期由日历订阅兜底，不会漏掉。</li>
+            <li>Course Hub 只读取 Canvas，从不提交、修改任何东西；不需要也不保存你的密码。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head"><h2>什么时候会通知你</h2></div>
+        <div className="card card-pad prose">
+          <ul>
+            <li>没交的作业：截止前 24 小时和 3 小时各一次（时间可以在设置里改）。同一时间截止的好几项会合成一条。</li>
+            <li>考试：同样提前提醒；只知道日期、不知道几点的考试，前一天晚上 6 点后提醒「明天考试」。</li>
+            <li>同步后马上提醒：截止时间被提前、48 小时内截止的新作业、新公告。</li>
+            <li>每天 7:00 日报，周日 20:00 周报。电脑当时在睡觉的话，醒来后补发。</li>
+            <li>所有通知都存在 <Link to="/notices">通知记录</Link> 里，错过了可以补看。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head"><h2>常见问题</h2></div>
+        <div className="stack">
+          <Q q="我在 Canvas 交了，这里还显示没交？">点左下角「立即同步」，一两分钟后就会更新。平时按设置里的频率自动同步（默认每 2 小时，夜里不同步）。</Q>
+          <Q q="某门课的作业不见了？">去 <Link to="/settings">设置</Link> 看那门课是不是被隐藏了；或者学校登录过期了（左下角会显示「需登录」）。</Q>
+          <Q q="学习讲解准不准？">讲解只根据这门课的课件、页面和作业要求来写，每个概念都标了出处（课件第几页），可以点过去对照。资料没讲到的背景知识会标「（补充）」。日期一律来自 Canvas，AI 不写日期。</Q>
+          <Q q="AI 会额外花钱吗？">不会。用的是你自己的 Claude 订阅（claude 命令），不走按量计费的 API。可以在设置里关掉 AI，日报周报照常生成，只是没有 AI 安排。</Q>
+          <Q q="电脑关机或睡眠了怎么办？">醒来后错过的同步、日报、提醒都会补上一次。Course Hub 开机自动启动，出错会自动重启。</Q>
+          <Q q="数据存在哪？会丢吗？">都在这台 Mac 的 ~/CourseHub/data 里，只有本机能打开。数据库每天自动备份（保留 14 天），坏了会自动恢复。课程文件不保存，都是链接到 Canvas。</Q>
+          <Q q="哪里能看出系统有没有问题？">左下角「<Link to="/status">系统状态</Link>」，有问题会亮红点，并且告诉你点哪里修。</Q>
+          <Q q="「已完成」是怎么判断的？">不是只看 Canvas 的「已交」：老师在作业说明里写的要求（比如一篇主帖加两条回复、互评三份）和 Canvas 自己的设置（讨论的回复次数、模块要求的最低分）都要满足才算完成；作业说明里写了更早的首帖截止（比如「Initial Post Due Thursday」），会单独列成一项、单独提醒。出了分、被老师免掉、或者你自己打了勾，也算完成。</Q>
+          <Q q="怎么知道没有漏掉东西？">每次同步完，Course Hub 都会拿 Canvas 自己的四份清单（待办、日历订阅、To Do、缺交列表）逐条核对一遍：Canvas 列出来、这里却没有或时间对不上的，都会写在「<Link to="/status">系统状态</Link>」里，连续两次都不一致就亮红点。Achieve 读不到时，「今天」页会直接提示你去 Achieve 看。</Q>
+          <Q q="页面出错或者转圈不动怎么办？">某一页出错只影响那一页，点「再试一次」或「回到今天」就行；后台连不上（比如刚更新完在重启）时顶部会提示，连上后自动刷新。后台程序卡住超过 2 分钟会自动重启，记录在通知里。</Q>
+        </div>
+      </section>
+    </div>
+  );
+}

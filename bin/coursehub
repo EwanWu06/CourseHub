@@ -1,0 +1,9 @@
+#!/bin/sh
+# Course Hub command line — see `coursehub help`. install.sh links this into ~/.local/bin.
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK="$(readlink "$SELF")"
+  case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
+done
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+exec node --disable-warning=ExperimentalWarning "$ROOT/src/cli.ts" "$@"
